@@ -132,10 +132,55 @@ public sealed class FakeGitHubHandler(IOptionsMonitor<GitHubAuthenticationOption
         Task.FromResult(FakeOAuth.Ticket(identity, properties, Scheme.Name, Request.Query["code"]));
 }
 
+/// <summary>
+/// Fault injection inside the database transaction of the API. <see cref="FailAfterSave"/> throws once the rows are
+/// written but before the explicit transaction commits; <see cref="FailOutboxInsert"/> refuses the statement that
+/// inserts the outbox row (EF sends it in the same batch as the business rows).
+/// </summary>
+public sealed class Faults
+{
+    public volatile bool FailAfterSave;
+    public volatile bool FailOutboxInsert;
+
+    public Interceptors.AfterSave AfterSave { get; } = new();
+
+    public Interceptors.OnCommand OnCommand { get; } = new();
+
+    public Faults() => (AfterSave.Owner, OnCommand.Owner) = (this, this);
+}
+
+public static class Interceptors
+{
+    public sealed class AfterSave : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        internal Faults Owner { get; set; } = null!;
+
+        public override ValueTask<int> SavedChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default) =>
+            Owner.FailAfterSave ? throw new InvalidOperationException("Injected failure after the rows were written.") : ValueTask.FromResult(result);
+    }
+
+    public sealed class OnCommand : Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor
+    {
+        internal Faults Owner { get; set; } = null!;
+
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader>> ReaderExecutingAsync(
+            System.Data.Common.DbCommand command,
+            Microsoft.EntityFrameworkCore.Diagnostics.CommandEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            Owner.FailOutboxInsert && command.CommandText.Contains("INSERT INTO \"OutboxMessages\"", StringComparison.Ordinal)
+                ? throw new InvalidOperationException("Injected failure on the outbox insert.")
+                : ValueTask.FromResult(result);
+    }
+}
+
 public sealed class DeskFactory(string connectionString, Dictionary<string, string?>? settings = null, bool oauthConfigured = true)
     : WebApplicationFactory<Program>
 {
     public FakeEmailSender Email { get; } = new();
+
+    public Faults Faults { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -169,6 +214,7 @@ public sealed class DeskFactory(string connectionString, Dictionary<string, stri
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<IEmailSender>(Email);
+            services.ConfigureDbContext<DeskDbContext>(o => o.AddInterceptors(Faults.AfterSave, Faults.OnCommand));
             services.AddTransient<FakeGoogleHandler>();
             services.AddTransient<FakeGitHubHandler>();
             services.Configure<AuthenticationOptions>(o =>
