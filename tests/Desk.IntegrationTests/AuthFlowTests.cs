@@ -373,3 +373,70 @@ public class AuthRateLimitTests(PostgresFixture postgres) : ApiTestBase(postgres
         }
     }
 }
+
+/// <summary>Account linking by verified e-mail (no invitation needed for an already known address).</summary>
+public class EmailLinkingTests(PostgresFixture postgres) : ApiTestBase(postgres)
+{
+    [Fact]
+    public async Task BootstrappedSuperAdmin_LinksOnFirstSignIn_WithoutInvitation()
+    {
+        var login = await ExternalLoginAsync("github", "gh-root", "Root@Platform.test");
+
+        Assert.Null(login.Error);
+        Assert.NotNull(login.RefreshCookie);
+        Assert.Equal(1, await QueryDbAsync(db => db.ExternalLogins.CountAsync(l => l.ProviderKey == "gh-root")));
+    }
+
+    [Fact]
+    public async Task ExistingUser_CanLinkASecondProvider()
+    {
+        var (_, admin) = await CreateTenantWithAdminAsync("acme", "admin@acme.test"); // linked to google
+
+        var login = await ExternalLoginAsync("github", "gh-admin", "admin@acme.test");
+
+        Assert.Null(login.Error);
+        Assert.NotNull(login.RefreshCookie);
+        Assert.Equal(2, await QueryDbAsync(db => db.ExternalLogins.CountAsync(l => l.UserId == db.Users.IgnoreQueryFilters().Single(u => u.Email == "admin@acme.test").Id)));
+        Assert.NotNull(admin);
+    }
+
+    [Fact]
+    public async Task LinkingByEmail_RefusesUnverifiedEmail()
+    {
+        await CreateTenantWithAdminAsync("acme", "admin@acme.test");
+
+        var login = await ExternalLoginAsync("github", "gh-admin", "admin@acme.test", verified: false);
+
+        Assert.Equal("email_not_verified", login.Error);
+        Assert.Null(login.RefreshCookie);
+        Assert.False(await QueryDbAsync(db => db.ExternalLogins.AnyAsync(l => l.ProviderKey == "gh-admin")));
+    }
+
+    [Fact]
+    public async Task LinkingByEmail_RefusesDisabledAccount_AndLinksNothing()
+    {
+        var (_, admin) = await CreateTenantWithAdminAsync("acme", "admin@acme.test");
+        var (agentId, _) = await InviteAndSignInAsync(admin, "pat@acme.test", "Agent");
+        await admin.PatchAsync($"/api/v1/users/{agentId}", new { isActive = false });
+
+        var login = await ExternalLoginAsync("github", "gh-pat", "pat@acme.test");
+
+        Assert.Equal("account_disabled", login.Error);
+        Assert.Null(login.RefreshCookie);
+        Assert.False(await QueryDbAsync(db => db.ExternalLogins.AnyAsync(l => l.ProviderKey == "gh-pat")));
+    }
+
+    [Fact]
+    public async Task LinkingByEmail_RefusesSuspendedTenant_AndLinksNothing()
+    {
+        var (tenantId, _) = await CreateTenantWithAdminAsync("acme", "admin@acme.test");
+        var root = await SignInSuperAdminAsync();
+        await root.PatchAsync($"/api/v1/tenants/{tenantId}", new { isActive = false });
+
+        var login = await ExternalLoginAsync("github", "gh-admin", "admin@acme.test");
+
+        Assert.Equal("tenant_suspended", login.Error);
+        Assert.Null(login.RefreshCookie);
+        Assert.False(await QueryDbAsync(db => db.ExternalLogins.AnyAsync(l => l.ProviderKey == "gh-admin")));
+    }
+}
