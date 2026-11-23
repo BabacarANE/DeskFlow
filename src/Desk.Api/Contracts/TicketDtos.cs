@@ -92,8 +92,8 @@ public static class RowVersions
 }
 
 /// <summary>A PATCH property that tells "absent" (unchanged) from <c>null</c> (clear) from a value.</summary>
-[JsonConverter(typeof(OptionalGuidConverter))]
 /// <param name="Malformed">The value was present but is not a UUID: reported as a 422 by the validator.</param>
+[JsonConverter(typeof(OptionalGuidConverter))]
 public readonly record struct OptionalGuid(bool IsSet, Guid? Value, bool Malformed = false);
 
 public sealed class OptionalGuidConverter : JsonConverter<OptionalGuid>
