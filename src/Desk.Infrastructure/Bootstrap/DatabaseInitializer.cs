@@ -14,6 +14,8 @@ public static class DemoAccounts
     public const string TenantSlug = "demo";
     public const string TenantName = "Entreprise de démo (données fictives)";
 
+    public static readonly string[] CategoryNames = ["Accès et comptes", "Matériel", "Messagerie", "Réseau et VPN", "Logiciels"];
+
     public static readonly IReadOnlyDictionary<string, (string Email, string Name, Role Role)> ByDemoRole =
         new Dictionary<string, (string, string, Role)>
         {
@@ -85,6 +87,15 @@ public static class DatabaseInitializer
             if (!await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email, ct))
             {
                 db.Users.Add(new User { TenantId = tenant.Id, Email = email, DisplayName = name, Role = role, CreatedAt = clock.GetUtcNow() });
+            }
+        }
+
+        // Demo categories, only on a company that has none yet (idempotent, never overwrites the admin's choices).
+        if (!await db.Categories.IgnoreQueryFilters().AnyAsync(c => c.TenantId == tenant.Id, ct))
+        {
+            foreach (var name in DemoAccounts.CategoryNames)
+            {
+                db.Categories.Add(new Category { TenantId = tenant.Id, Name = name });
             }
         }
 
