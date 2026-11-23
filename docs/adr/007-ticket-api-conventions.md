@@ -15,3 +15,7 @@ Le SPEC et le contrat laissent plusieurs points ouverts ; l'audit de la phase 2 
 
 ## Conséquences
 Comportements couverts par des tests d'intégration ; à revoir si le SPEC les précise autrement.
+
+## Écarts connus (phase 2)
+- `POST /tickets` avec un `categoryId` mal formé répond 400 (échec de désérialisation) au lieu de 422 annoncé par le contrat ; `PATCH` répond bien 422. Cas marginal, à aligner plus tard.
+- Les commentaires concurrents sur un même ticket sont rejoués 10 fois au plus, sans temporisation : au-delà d une dizaine de commentaires simultanés, certains reçoivent 409 `concurrency-conflict`.
