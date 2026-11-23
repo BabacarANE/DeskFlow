@@ -22,7 +22,7 @@ import {
   UpdateTicketRequest,
   UserRef,
 } from '../../core/api/models';
-import { allowedTransitions, isAgentRole, isSlaBreached } from '../../core/api/ticket-rules';
+import { allowedTransitions, isAgentRole, isSlaBreachedDetail } from '../../core/api/ticket-rules';
 import { AuthService } from '../../core/auth/auth.service';
 import { FieldError, applyFieldErrors } from '../../shared/field-error';
 import { StatusMessage } from '../../shared/status-message';
@@ -77,7 +77,7 @@ interface Conflict {
               <div class="flex flex-wrap items-center gap-2">
                 <app-status-badge [status]="t.status" />
                 <app-priority-badge [priority]="t.priority" />
-                @if (breached()) {
+                @if (isAgent() && breached()) {
                   <app-sla-badge />
                 }
               </div>
@@ -107,6 +107,8 @@ interface Conflict {
               </dl>
             </header>
 
+            <p class="sr-only" role="status">{{ notice() }}</p>
+
             @if (conflict(); as c) {
               <div class="rounded-md border border-line bg-primary-soft p-4" role="alert">
                 <p class="font-medium">
@@ -118,7 +120,7 @@ interface Conflict {
                   <button
                     type="button"
                     class="btn btn-secondary btn-small"
-                    [disabled]="busy()"
+                    [attr.aria-disabled]="busy()"
                     (click)="reapply()"
                   >
                     Réappliquer ma modification
@@ -164,7 +166,7 @@ interface Conflict {
                           <button
                             type="button"
                             class="btn btn-secondary"
-                            [disabled]="busy()"
+                            [attr.aria-disabled]="busy()"
                             (click)="changeStatus(next)"
                           >
                             Passer à « {{ statusLabels[next] }} »
@@ -183,7 +185,7 @@ interface Conflict {
                     <select
                       id="ticket-priority"
                       class="field"
-                      [disabled]="busy()"
+                      [attr.aria-disabled]="busy()"
                       (change)="changePriority($event)"
                     >
                       @for (priority of priorities; track priority) {
@@ -201,7 +203,7 @@ interface Conflict {
                     <select
                       id="ticket-assignee"
                       class="field"
-                      [disabled]="busy()"
+                      [attr.aria-disabled]="busy()"
                       (change)="changeAssignee($event)"
                     >
                       <option value="" [selected]="!t.assignee">Non assigné</option>
@@ -215,7 +217,7 @@ interface Conflict {
                       <button
                         type="button"
                         class="btn btn-secondary btn-small mt-2"
-                        [disabled]="busy()"
+                        [attr.aria-disabled]="busy()"
                         (click)="assignToMe()"
                       >
                         M’assigner
@@ -230,7 +232,7 @@ interface Conflict {
                     <select
                       id="ticket-category"
                       class="field"
-                      [disabled]="busy()"
+                      [attr.aria-disabled]="busy()"
                       (change)="changeCategory($event)"
                     >
                       <option value="" [selected]="!t.category">Aucune catégorie</option>
@@ -263,7 +265,7 @@ interface Conflict {
                     >
                       <p class="flex flex-wrap items-center gap-2 text-sm">
                         <span class="font-medium">{{ comment.author.displayName }}</span>
-                        <span class="text-ink-muted">
+                        <span [class]="comment.isInternal ? 'text-ink' : 'text-ink-muted'">
                           {{ comment.createdAt | date: 'dd/MM/yyyy HH:mm' }}
                         </span>
                         @if (comment.isInternal) {
@@ -317,7 +319,7 @@ interface Conflict {
                       {{ message }}
                     </p>
                   }
-                  <button type="submit" class="btn btn-accent" [disabled]="busy()">
+                  <button type="submit" class="btn btn-accent" [attr.aria-disabled]="busy()">
                     {{ replyForm.controls.isInternal.value ? 'Ajouter la note' : 'Envoyer' }}
                   </button>
                 </form>
@@ -384,6 +386,8 @@ export class TicketDetail implements OnInit {
   protected readonly actionError = signal<string | null>(null);
   protected readonly replyError = signal<string | null>(null);
   protected readonly conflict = signal<Conflict | null>(null);
+  /** Success announcement read by assistive technologies (role=status). */
+  protected readonly notice = signal('');
 
   protected readonly me = this.auth.user;
   protected readonly isAgent = computed(() => isAgentRole(this.auth.role()));
@@ -393,7 +397,7 @@ export class TicketDetail implements OnInit {
   });
   protected readonly breached = computed(() => {
     const t = this.ticket();
-    return t ? isSlaBreached(t) : false;
+    return t ? isSlaBreachedDetail(t) : false;
   });
 
   ngOnInit(): void {
@@ -484,7 +488,9 @@ export class TicketDetail implements OnInit {
   }
 
   protected async reply(): Promise<void> {
+    if (this.busy()) return;
     this.replyError.set(null);
+    this.notice.set('');
     if (this.replyForm.invalid) {
       this.replyForm.markAllAsTouched();
       return;
@@ -500,6 +506,7 @@ export class TicketDetail implements OnInit {
         }),
       );
       this.replyForm.reset({ body: '', isInternal: false });
+      this.notice.set('Réponse envoyée.');
       await this.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 422 && applyFieldErrors(this.replyForm, err)) {
@@ -522,7 +529,8 @@ export class TicketDetail implements OnInit {
    */
   private async apply(change: TicketChange, summary: string): Promise<boolean> {
     const current = this.ticket();
-    if (!current) return false;
+    if (!current || this.busy()) return false;
+    this.notice.set('');
     this.actionError.set(null);
     this.conflict.set(null);
     this.busy.set(true);
@@ -531,6 +539,7 @@ export class TicketDetail implements OnInit {
         this.api.updateTicket(this.id, { ...change, rowVersion: current.rowVersion }),
       );
       this.ticket.set(updated);
+      this.notice.set('Ticket mis à jour.');
       void this.loadEvents();
       return true;
     } catch (err) {

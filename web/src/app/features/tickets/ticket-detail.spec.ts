@@ -5,6 +5,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { ApiError } from '../../core/api/api-error';
 import { Comment, Role, TicketDetail as Ticket, TicketEvent } from '../../core/api/models';
 import { AuthService } from '../../core/auth/auth.service';
+import { contrastRatio } from '../../core/theme/contrast';
 import { detail } from '../../testing/ticket-fixtures';
 import { TicketDetail } from './ticket-detail';
 
@@ -33,6 +34,17 @@ const EVENTS: TicketEvent[] = [
     at: '2026-11-01T09:10:00Z',
   },
 ];
+
+/** Test-only colour mix, standing in for CSS color-mix(): share of `a` over `b`. */
+function mix(a: string, b: string, share: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const out = [0, 1, 2].map((i) =>
+    Math.round(channel(a, i) * share + channel(b, i) * (1 - share))
+      .toString(16)
+      .padStart(2, '0'),
+  );
+  return `#${out.join('')}`;
+}
 
 function problem(status: number, type?: string) {
   return new ApiError(status, 'Conflit', type ? { type, status } : null);
@@ -327,6 +339,63 @@ describe('TicketDetail', () => {
       expect(history).toContain('Statut modifié');
       expect(history).toContain('Nouveau → Ouvert');
       expect(history).toContain('Adam Agent');
+    });
+
+    it('announces a successful change in a status region', async () => {
+      await render('Agent', detail('t1', { status: 'Open', rowVersion: '5' }));
+      expect(el().querySelector('p.sr-only[role="status"]')?.textContent?.trim()).toBe('');
+      api.updateTicket.mockReturnValue(of(detail('t1', { status: 'Pending', rowVersion: '6' })));
+      button('Passer à « En attente du demandeur »')?.click();
+      await settle();
+      expect(el().querySelector('p.sr-only[role="status"]')?.textContent).toContain(
+        'Ticket mis à jour.',
+      );
+    });
+
+    it('keeps buttons focusable while saving (aria-disabled) and ignores a second action', async () => {
+      await render('Agent', detail('t1', { status: 'Open', rowVersion: '5' }));
+      const pending = new Subject<Ticket>();
+      api.updateTicket.mockReturnValue(pending);
+      const resolve = button('Passer à « Résolu »') as HTMLButtonElement;
+      resolve.focus();
+      resolve.click();
+      fixture.detectChanges();
+      expect(resolve.disabled).toBe(false);
+      expect(resolve.getAttribute('aria-disabled')).toBe('true');
+      expect(document.activeElement).toBe(resolve);
+      resolve.click();
+      expect(api.updateTicket).toHaveBeenCalledTimes(1);
+      pending.next(detail('t1', { status: 'Resolved', rowVersion: '6' }));
+      pending.complete();
+      await settle();
+      expect(el().querySelector('[aria-label="Transitions possibles"] button')).not.toBeNull();
+    });
+
+    it('shows the SLA alert to agents only', async () => {
+      const late = detail('t1', {
+        status: 'Open',
+        firstResponseAt: null,
+        responseDueAt: '2020-01-01T00:00:00Z',
+      });
+      await render('Agent', late);
+      expect(el().textContent).toContain('Échéance SLA dépassée');
+      TestBed.resetTestingModule();
+      await render('Requester', late);
+      expect(el().textContent).not.toContain('Échéance SLA dépassée');
+    });
+
+    it('keeps internal notes readable on a dark primary (no muted text on primary-soft)', async () => {
+      await render(
+        'Agent',
+        detail('t1', { comments: [comment('c2', { isInternal: true, body: 'Note' })] }),
+      );
+      const note = el().querySelector('[data-internal="true"]') as HTMLElement;
+      expect(note.className).toContain('bg-primary-soft');
+      expect(note.querySelector('.text-ink-muted')).toBeNull();
+      // Worst case of a dark primary: primary-soft is a 22 % tint on white, ink must pass 4.5:1.
+      const tint = mix('#101820', '#ffffff', 0.22);
+      expect(contrastRatio(tint, '#14212b')).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(tint, '#5b6b79')).toBeLessThan(4.5); // why muted is banned here
     });
 
     it('has a single accent button', async () => {
