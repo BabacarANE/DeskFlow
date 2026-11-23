@@ -1,0 +1,12 @@
+bin/
+obj/
+node_modules/
+dist/
+.angular/
+.vs/
+*.user
+TestResults/
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
