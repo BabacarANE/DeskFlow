@@ -1,0 +1,207 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DeskFlow API",
+    "version": "0.1.0-phase1",
+    "description": "Contrat de la phase 1 (identité et multi-entreprise), SPEC sections 4, 5, 9. Gelé par l'orchestrateur : tout changement passe par lui. Enums en chaînes, JSON camelCase, erreurs ProblemDetails (RFC 7807), validation 422, ressource d'une autre entreprise = 404."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "tags": [{ "name": "auth" }, { "name": "me" }, { "name": "tenants" }, { "name": "users" }, { "name": "invitations" }],
+  "paths": {
+    "/auth/external/{provider}": {
+      "get": {
+        "tags": ["auth"], "operationId": "startExternalLogin", "security": [],
+        "summary": "Démarre la connexion OAuth (redirection 302 vers le fournisseur)",
+        "description": "Au retour du fournisseur, l'API pose le cookie refresh (HttpOnly, Secure, SameSite=Lax) et redirige vers /auth/callback du front. En cas d'échec, redirection vers /auth/callback?error=<code> avec code parmi : invitation_required, invitation_invalid, email_mismatch, email_not_verified, account_disabled, tenant_suspended.",
+        "parameters": [
+          { "name": "provider", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Provider" } },
+          { "name": "invitation", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Jeton d'invitation en clair" }
+        ],
+        "responses": { "302": { "description": "Redirection vers le fournisseur" }, "404": { "$ref": "#/components/responses/Problem" }, "429": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["auth"], "operationId": "refreshToken", "security": [{ "refreshCookie": [] }],
+        "summary": "Renouvelle le refresh token (rotation) et renvoie un access token",
+        "responses": {
+          "200": { "description": "Access token JWT de 15 minutes", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccessToken" } } } },
+          "401": { "$ref": "#/components/responses/Problem" }, "429": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["auth"], "operationId": "logout", "security": [{ "bearer": [] }],
+        "summary": "Révoque le refresh token et supprime le cookie",
+        "responses": { "204": { "description": "Déconnecté" }, "401": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/auth/demo": {
+      "post": {
+        "tags": ["auth"], "operationId": "demoLogin", "security": [],
+        "summary": "Connexion avec un compte de démo (existe seulement si Demo:Enabled=true, sinon 404)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DemoLoginRequest" } } } },
+        "responses": {
+          "200": { "description": "Access token ; cookie refresh posé", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccessToken" } } } },
+          "404": { "$ref": "#/components/responses/Problem" }, "422": { "$ref": "#/components/responses/Problem" }, "429": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": ["me"], "operationId": "getMe", "security": [{ "bearer": [] }],
+        "summary": "Profil, rôle, entreprise et thème",
+        "responses": { "200": { "description": "Profil", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } } }, "401": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/tenants": {
+      "get": {
+        "tags": ["tenants"], "operationId": "listTenants", "security": [{ "bearer": [] }], "summary": "SuperAdmin : liste des entreprises",
+        "parameters": [{ "$ref": "#/components/parameters/page" }, { "$ref": "#/components/parameters/pageSize" }],
+        "responses": { "200": { "description": "Page", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TenantPage" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" } }
+      },
+      "post": {
+        "tags": ["tenants"], "operationId": "createTenant", "security": [{ "bearer": [] }],
+        "summary": "SuperAdmin : crée l'entreprise (SLA et thème par défaut) et invite son premier TenantAdmin",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTenantRequest" } } } },
+        "responses": { "201": { "description": "Créée", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Tenant" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" }, "409": { "$ref": "#/components/responses/Problem" }, "422": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/tenants/{id}": {
+      "patch": {
+        "tags": ["tenants"], "operationId": "updateTenant", "security": [{ "bearer": [] }], "summary": "SuperAdmin : renomme ou suspend/réactive une entreprise",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateTenantRequest" } } } },
+        "responses": { "200": { "description": "Mise à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Tenant" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" }, "404": { "$ref": "#/components/responses/Problem" }, "422": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["users"], "operationId": "listUsers", "security": [{ "bearer": [] }], "summary": "TenantAdmin : utilisateurs de l'entreprise",
+        "parameters": [{ "$ref": "#/components/parameters/page" }, { "$ref": "#/components/parameters/pageSize" }],
+        "responses": { "200": { "description": "Page", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserPage" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/users/{id}": {
+      "patch": {
+        "tags": ["users"], "operationId": "updateUser", "security": [{ "bearer": [] }], "summary": "TenantAdmin : change le rôle ou désactive un utilisateur (jamais soi-même ; le rôle SuperAdmin n'est pas attribuable)",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateUserRequest" } } } },
+        "responses": { "200": { "description": "Mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" }, "404": { "$ref": "#/components/responses/Problem" }, "409": { "$ref": "#/components/responses/Problem" }, "422": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/invitations": {
+      "get": {
+        "tags": ["invitations"], "operationId": "listInvitations", "security": [{ "bearer": [] }], "summary": "TenantAdmin : invitations de l'entreprise",
+        "parameters": [{ "$ref": "#/components/parameters/page" }, { "$ref": "#/components/parameters/pageSize" }],
+        "responses": { "200": { "description": "Page", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InvitationPage" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" } }
+      },
+      "post": {
+        "tags": ["invitations"], "operationId": "createInvitation", "security": [{ "bearer": [] }], "summary": "TenantAdmin : invite par e-mail (valide 7 jours, usage unique). L'e-mail est envoyé par SMTP (Mailpit en dev).",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateInvitationRequest" } } } },
+        "responses": { "201": { "description": "Créée", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Invitation" } } } }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" }, "409": { "$ref": "#/components/responses/Problem" }, "422": { "$ref": "#/components/responses/Problem" } }
+      }
+    },
+    "/invitations/{id}": {
+      "delete": {
+        "tags": ["invitations"], "operationId": "revokeInvitation", "security": [{ "bearer": [] }], "summary": "TenantAdmin : révoque une invitation non acceptée",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": { "204": { "description": "Révoquée" }, "401": { "$ref": "#/components/responses/Problem" }, "403": { "$ref": "#/components/responses/Problem" }, "404": { "$ref": "#/components/responses/Problem" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT", "description": "Claims : sub, tid (absent pour SuperAdmin), role, email, name. Durée 15 min." },
+      "refreshCookie": { "type": "apiKey", "in": "cookie", "name": "deskflow_refresh", "description": "HttpOnly, Secure, SameSite=Lax, 7 jours, rotation à chaque usage" }
+    },
+    "parameters": {
+      "id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "page": { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+      "pageSize": { "name": "pageSize", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+    },
+    "responses": {
+      "Problem": { "description": "Erreur RFC 7807", "content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/ProblemDetails" } } } }
+    },
+    "schemas": {
+      "Provider": { "type": "string", "enum": ["google", "github"] },
+      "Role": { "type": "string", "enum": ["SuperAdmin", "TenantAdmin", "Agent", "Requester"] },
+      "DemoRole": { "type": "string", "enum": ["admin", "agent", "demandeur"] },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" }, "title": { "type": "string" }, "status": { "type": "integer" }, "detail": { "type": "string" }, "instance": { "type": "string" },
+          "errors": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } }, "description": "Présent pour 422 : champ -> messages" }
+        }
+      },
+      "AccessToken": {
+        "type": "object", "required": ["accessToken", "expiresIn"],
+        "properties": { "accessToken": { "type": "string" }, "expiresIn": { "type": "integer", "description": "secondes", "example": 900 } }
+      },
+      "DemoLoginRequest": { "type": "object", "required": ["role"], "properties": { "role": { "$ref": "#/components/schemas/DemoRole" } } },
+      "Theme": {
+        "type": "object", "required": ["colorPrimary", "colorSurface", "colorAccent"],
+        "properties": {
+          "colorPrimary": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "example": "#7CC4EE" },
+          "colorSurface": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "example": "#F4F7FA" },
+          "colorAccent": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "example": "#D63A14" }
+        }
+      },
+      "Me": {
+        "type": "object", "required": ["id", "email", "displayName", "role", "isDemo"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" }, "email": { "type": "string", "format": "email" }, "displayName": { "type": "string" },
+          "avatarUrl": { "type": "string", "nullable": true }, "role": { "$ref": "#/components/schemas/Role" },
+          "tenant": { "nullable": true, "allOf": [{ "$ref": "#/components/schemas/MeTenant" }], "description": "Null pour le SuperAdmin" },
+          "isDemo": { "type": "boolean", "description": "Vrai si Demo:Enabled : le front affiche la bannière « Mode démo, données fictives »" }
+        }
+      },
+      "MeTenant": {
+        "type": "object", "required": ["id", "name", "slug", "theme"],
+        "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "slug": { "type": "string" }, "theme": { "$ref": "#/components/schemas/Theme" } }
+      },
+      "Tenant": {
+        "type": "object", "required": ["id", "name", "slug", "isActive", "createdAt"],
+        "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "slug": { "type": "string" }, "isActive": { "type": "boolean" }, "createdAt": { "type": "string", "format": "date-time" } }
+      },
+      "CreateTenantRequest": {
+        "type": "object", "required": ["name", "slug", "adminEmail"],
+        "properties": { "name": { "type": "string", "maxLength": 100 }, "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 50 }, "adminEmail": { "type": "string", "format": "email" } }
+      },
+      "UpdateTenantRequest": { "type": "object", "properties": { "name": { "type": "string", "maxLength": 100 }, "isActive": { "type": "boolean" } } },
+      "User": {
+        "type": "object", "required": ["id", "email", "displayName", "role", "isActive", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" }, "email": { "type": "string", "format": "email" }, "displayName": { "type": "string" },
+          "avatarUrl": { "type": "string", "nullable": true }, "role": { "$ref": "#/components/schemas/Role" }, "isActive": { "type": "boolean" }, "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UpdateUserRequest": { "type": "object", "properties": { "role": { "type": "string", "enum": ["TenantAdmin", "Agent", "Requester"] }, "isActive": { "type": "boolean" } } },
+      "Invitation": {
+        "type": "object", "required": ["id", "email", "role", "expiresAt", "status"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" }, "email": { "type": "string", "format": "email" }, "role": { "$ref": "#/components/schemas/Role" },
+          "expiresAt": { "type": "string", "format": "date-time" }, "acceptedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "status": { "type": "string", "enum": ["Pending", "Accepted", "Expired"] }
+        }
+      },
+      "CreateInvitationRequest": {
+        "type": "object", "required": ["email", "role"],
+        "properties": { "email": { "type": "string", "format": "email" }, "role": { "type": "string", "enum": ["TenantAdmin", "Agent", "Requester"] } }
+      },
+      "TenantPage": {
+        "type": "object", "required": ["items", "total", "page", "pageSize"],
+        "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Tenant" } }, "total": { "type": "integer" }, "page": { "type": "integer" }, "pageSize": { "type": "integer" } }
+      },
+      "UserPage": {
+        "type": "object", "required": ["items", "total", "page", "pageSize"],
+        "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }, "total": { "type": "integer" }, "page": { "type": "integer" }, "pageSize": { "type": "integer" } }
+      },
+      "InvitationPage": {
+        "type": "object", "required": ["items", "total", "page", "pageSize"],
+        "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Invitation" } }, "total": { "type": "integer" }, "page": { "type": "integer" }, "pageSize": { "type": "integer" } }
+      }
+    }
+  }
+}

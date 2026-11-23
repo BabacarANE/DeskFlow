@@ -1,10 +1,53 @@
+<a
+  href="#contenu"
+  class="sr-only rounded-md bg-card px-3 py-2 focus:not-sr-only focus:absolute focus:left-2 focus:top-2"
+>
+  Aller au contenu
+</a>
+
+@if (auth.isDemo()) {
+  <div
+    class="border-b border-line bg-primary-soft px-4 py-2 text-center text-sm font-medium"
+    role="status"
+  >
+    Mode démo, données fictives
+  </div>
+}
+
 <header class="bg-primary text-(--on-primary)">
-  <div class="mx-auto flex max-w-5xl items-center px-4 py-3">
+  <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
     <span class="text-lg font-semibold">DeskFlow</span>
+
+    @if (auth.user(); as user) {
+      <nav aria-label="Navigation principale" class="flex flex-wrap gap-1">
+        @for (item of navItems(); track item.path) {
+          <a
+            [routerLink]="item.path"
+            routerLinkActive="border-current"
+            ariaCurrentWhenActive="page"
+            class="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-(--on-primary) no-underline hover:underline"
+          >
+            {{ item.label }}
+          </a>
+        }
+      </nav>
+
+      <div class="ml-auto flex items-center gap-3 text-sm">
+        <span>
+          <span class="font-medium">{{ user.displayName }}</span>
+          <span class="hidden sm:inline"> · {{ roleLabels[user.role] }}</span>
+          @if (user.tenant; as tenant) {
+            <span class="hidden md:inline"> · {{ tenant.name }}</span>
+          }
+        </span>
+        <button type="button" class="btn btn-secondary btn-small" (click)="logout()">
+          Se déconnecter
+        </button>
+      </div>
+    }
   </div>
 </header>
-<main class="mx-auto max-w-5xl px-4 py-8">
-  <h1 class="text-2xl font-semibold">{{ title() }}</h1>
-  <p class="mt-2 text-ink-muted">Plateforme de ticketing helpdesk multi-entreprises.</p>
+
+<main id="contenu" class="mx-auto max-w-5xl px-4 py-8">
   <router-outlet />
 </main>
