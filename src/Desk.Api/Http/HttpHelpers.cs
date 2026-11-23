@@ -71,7 +71,11 @@ public static class PagingExtensions
         this IQueryable<TIn> ordered, int page, int pageSize, Func<TIn, TOut> map, CancellationToken ct)
     {
         var total = await ordered.CountAsync(ct);
-        var items = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        // long offset: page=int.MaxValue must not overflow. Past the last item the page is simply empty.
+        var offset = (long)(page - 1) * pageSize;
+        var items = offset >= total || offset > int.MaxValue
+            ? new List<TIn>()
+            : await ordered.Skip((int)offset).Take(pageSize).ToListAsync(ct);
         return new PagedResult<TOut>(items.Select(map).ToList(), total, page, pageSize);
     }
 }

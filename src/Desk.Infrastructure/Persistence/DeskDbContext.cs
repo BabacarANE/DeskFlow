@@ -95,6 +95,7 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
         {
             e.HasKey(x => x.TenantId);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => CurrentTenantId != null && x.TenantId == CurrentTenantId);
         });
 
         b.Entity<Ticket>(e =>
