@@ -3,6 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { HUB_FACTORY } from './core/realtime/hub';
 import { of } from 'rxjs';
 import { App } from './app';
 import { Me } from './core/api/models';
@@ -38,6 +39,16 @@ describe('App', () => {
             listCategories: () => of([]),
             listAssignees: () => of([]),
           },
+        },
+        // No real connection in unit tests: a hub that never answers.
+        {
+          provide: HUB_FACTORY,
+          useValue: () => ({
+            start: () => new Promise<void>(() => undefined),
+            stop: () => Promise.resolve(),
+            on: () => undefined,
+            onclose: () => undefined,
+          }),
         },
         provideHttpClient(),
         provideHttpClientTesting(),

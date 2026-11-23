@@ -2,7 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ROLE_LABELS } from './core/api/labels';
 import { Role } from './core/api/models';
+import { isAgentRole } from './core/api/ticket-rules';
 import { AuthService } from './core/auth/auth.service';
+import { RealtimeService } from './core/realtime/realtime.service';
+import { NotificationBell } from './shared/notification-bell';
 
 interface NavItem {
   label: string;
@@ -17,7 +20,7 @@ const NAV: NavItem[] = [
 ];
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell],
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app.css',
@@ -26,6 +29,12 @@ const NAV: NavItem[] = [
 export class App {
   protected readonly auth = inject(AuthService);
   protected readonly roleLabels = ROLE_LABELS;
+  protected readonly hasRealtime = computed(() => isAgentRole(this.auth.role()));
+
+  constructor() {
+    inject(RealtimeService).init();
+  }
+
   protected readonly navItems = computed(() => {
     const role = this.auth.role();
     return role ? NAV.filter((item) => item.roles.includes(role)) : [];

@@ -40,6 +40,9 @@
             <span class="hidden md:inline"> · {{ tenant.name }}</span>
           }
         </span>
+        @if (hasRealtime()) {
+          <app-notification-bell />
+        }
         <button type="button" class="btn btn-secondary btn-small" (click)="logout()">
           Se déconnecter
         </button>
