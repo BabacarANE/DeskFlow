@@ -4,22 +4,32 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AccessToken,
+  Category,
+  Comment,
+  CreateCommentRequest,
   CreateInvitationRequest,
   CreateTenantRequest,
+  CreateTicketRequest,
   DemoRole,
   Invitation,
   Me,
   Page,
   Provider,
   Tenant,
+  TicketDetail,
+  TicketEvent,
+  TicketQuery,
+  TicketSummary,
+  UpdateTicketRequest,
   UpdateTenantRequest,
   UpdateUserRequest,
   User,
+  UserRef,
 } from './models';
 
 export const API_BASE = '/api/v1';
 
-/** Typed client for the phase 1 contract (docs/api/openapi.json). */
+/** Typed client for the phase 1 and 2 contract (docs/api/openapi.json). */
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   private readonly http = inject(HttpClient);
@@ -81,6 +91,42 @@ export class ApiClient {
 
   revokeInvitation(id: string): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/invitations/${id}`);
+  }
+
+  listCategories(): Observable<Category[]> {
+    return this.http.get<Category[]>(`${API_BASE}/categories`);
+  }
+
+  listAssignees(): Observable<UserRef[]> {
+    return this.http.get<UserRef[]>(`${API_BASE}/assignees`);
+  }
+
+  listTickets(query: TicketQuery = {}): Observable<Page<TicketSummary>> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') params = params.set(key, value);
+    }
+    return this.http.get<Page<TicketSummary>>(`${API_BASE}/tickets`, { params });
+  }
+
+  createTicket(body: CreateTicketRequest): Observable<TicketDetail> {
+    return this.http.post<TicketDetail>(`${API_BASE}/tickets`, body);
+  }
+
+  getTicket(id: string): Observable<TicketDetail> {
+    return this.http.get<TicketDetail>(`${API_BASE}/tickets/${id}`);
+  }
+
+  updateTicket(id: string, body: UpdateTicketRequest): Observable<TicketDetail> {
+    return this.http.patch<TicketDetail>(`${API_BASE}/tickets/${id}`, body);
+  }
+
+  addComment(id: string, body: CreateCommentRequest): Observable<Comment> {
+    return this.http.post<Comment>(`${API_BASE}/tickets/${id}/comments`, body);
+  }
+
+  listTicketEvents(id: string): Observable<TicketEvent[]> {
+    return this.http.get<TicketEvent[]>(`${API_BASE}/tickets/${id}/events`);
   }
 
   private paging(page: number, pageSize: number): HttpParams {
