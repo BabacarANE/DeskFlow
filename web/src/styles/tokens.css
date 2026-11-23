@@ -1,6 +1,6 @@
 /*
  * Locked palette (SPEC section 10). The only place hex values are allowed.
- * Per-tenant themes override these variables on :root at runtime (phase 4).
+ * Per-tenant themes override these variables on :root at runtime (ThemeService).
  */
 @theme static {
   --color-primary: #7cc4ee; /* Bleu ciel */
@@ -11,6 +11,24 @@
 }
 
 :root {
-  --on-primary: #0b2a3c;
-  --on-accent: #ffffff;
+  --on-dark: #0b2a3c;
+  --on-light: #ffffff;
+  --on-primary: var(--on-dark);
+  --on-accent: var(--on-light);
+}
+
+/*
+ * Tints derived from the tenant colours. They live on :root (not in @theme) so that Tailwind
+ * does not inline the current palette: they keep following the runtime theme, with no hex.
+ */
+:root {
+  --tint-primary: color-mix(in srgb, var(--color-primary) 22%, white);
+  --tint-card: color-mix(in srgb, var(--color-surface) 35%, white);
+  --tint-line: color-mix(in srgb, var(--color-ink) 18%, var(--color-surface));
+}
+
+@theme static inline {
+  --color-primary-soft: var(--tint-primary);
+  --color-card: var(--tint-card);
+  --color-line: var(--tint-line);
 }
