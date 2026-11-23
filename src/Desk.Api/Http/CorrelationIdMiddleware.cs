@@ -13,7 +13,7 @@ public sealed partial class CorrelationIdMiddleware(RequestDelegate next)
 {
     public const string HeaderName = "X-Correlation-Id";
 
-    [GeneratedRegex("^[A-Za-z0-9._-]{1,64}\z")]
+    [GeneratedRegex(@"^[A-Za-z0-9._-]{1,64}\z")]
     private static partial Regex Safe();
 
     public async Task InvokeAsync(HttpContext context)
