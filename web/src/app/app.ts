@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ROLE_LABELS } from './core/api/labels';
 import { Role } from './core/api/models';
@@ -25,7 +25,6 @@ const NAV: NavItem[] = [
 })
 export class App {
   protected readonly auth = inject(AuthService);
-  protected readonly title = signal('Bienvenue sur DeskFlow');
   protected readonly roleLabels = ROLE_LABELS;
   protected readonly navItems = computed(() => {
     const role = this.auth.role();

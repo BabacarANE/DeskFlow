@@ -10,7 +10,7 @@ import { authErrorMessage } from './auth-errors';
   imports: [RouterLink],
   template: `
     <section class="mx-auto max-w-md space-y-4" aria-labelledby="callback-title">
-      <h2 id="callback-title" class="text-2xl font-semibold">Connexion</h2>
+      <h1 id="callback-title" class="text-2xl font-semibold">Connexion</h1>
       @if (error(); as message) {
         <div class="card space-y-4" role="alert">
           <p class="font-medium">{{ message }}</p>

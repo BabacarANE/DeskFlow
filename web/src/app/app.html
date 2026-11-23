@@ -23,9 +23,9 @@
         @for (item of navItems(); track item.path) {
           <a
             [routerLink]="item.path"
-            routerLinkActive="bg-card"
+            routerLinkActive="border-current"
             ariaCurrentWhenActive="page"
-            class="rounded-md px-3 py-2 text-sm font-medium text-(--on-primary) no-underline hover:bg-primary-soft"
+            class="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-(--on-primary) no-underline hover:underline"
           >
             {{ item.label }}
           </a>
@@ -49,6 +49,5 @@
 </header>
 
 <main id="contenu" class="mx-auto max-w-5xl px-4 py-8">
-  <h1 class="sr-only">{{ title() }}</h1>
   <router-outlet />
 </main>

@@ -19,10 +19,10 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
   imports: [DatePipe, ReactiveFormsModule, FieldError, Pager, StatusMessage],
   template: `
     <div class="space-y-10">
-      <h2 class="text-2xl font-semibold">Entreprises</h2>
+      <h1 class="text-2xl font-semibold">Entreprises</h1>
 
       <section class="card space-y-4" aria-labelledby="create-title">
-        <h3 id="create-title" class="text-xl font-semibold">Créer une entreprise</h3>
+        <h2 id="create-title" class="text-xl font-semibold">Créer une entreprise</h2>
         <p class="text-sm text-ink-muted">
           Le premier administrateur reçoit une invitation par e-mail.
         </p>
@@ -86,7 +86,7 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
       </section>
 
       <section class="card space-y-4" aria-labelledby="tenants-title">
-        <h3 id="tenants-title" class="text-xl font-semibold">Liste des entreprises</h3>
+        <h2 id="tenants-title" class="text-xl font-semibold">Liste des entreprises</h2>
 
         @if (actionError(); as message) {
           <p

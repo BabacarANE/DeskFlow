@@ -7,9 +7,9 @@ import { AuthService } from '../../core/auth/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="space-y-3" aria-labelledby="tickets-title">
-      <h2 id="tickets-title" class="text-2xl font-semibold">
+      <h1 id="tickets-title" class="text-2xl font-semibold">
         Bonjour {{ auth.user()?.displayName }}
-      </h2>
+      </h1>
       <p class="text-ink-muted">
         La liste des tickets arrive bientôt. Votre connexion fonctionne : vous êtes connecté·e à
         {{ auth.user()?.tenant?.name ?? 'la plateforme' }}.

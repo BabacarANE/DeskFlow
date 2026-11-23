@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
   imports: [DatePipe, Pager, StatusMessage],
   template: `
     <section class="card space-y-4" aria-labelledby="users-title">
-      <h3 id="users-title" class="text-xl font-semibold">Utilisateurs</h3>
+      <h2 id="users-title" class="text-xl font-semibold">Utilisateurs</h2>
 
       @if (actionError(); as message) {
         <p

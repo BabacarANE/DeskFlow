@@ -15,7 +15,7 @@ import { AuthService, homeFor } from '../../core/auth/auth.service';
   template: `
     <section class="mx-auto max-w-md space-y-6" aria-labelledby="login-title">
       <div>
-        <h2 id="login-title" class="text-2xl font-semibold">Connexion</h2>
+        <h1 id="login-title" class="text-2xl font-semibold">Connexion</h1>
         <p class="mt-1 text-ink-muted">Plateforme de ticketing helpdesk multi-entreprises.</p>
       </div>
 
@@ -27,7 +27,7 @@ import { AuthService, homeFor } from '../../core/auth/auth.service';
       }
 
       <div class="card space-y-3">
-        <h3 class="font-semibold">Se connecter avec un compte existant</h3>
+        <h2 class="font-semibold">Se connecter avec un compte existant</h2>
         @for (p of providers; track p.id) {
           <a class="btn btn-secondary w-full" [href]="url(p.id)">Continuer avec {{ p.label }}</a>
         }

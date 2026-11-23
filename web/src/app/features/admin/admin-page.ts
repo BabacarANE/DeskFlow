@@ -9,7 +9,7 @@ import { UsersList } from './users-list';
   imports: [UsersList, InvitationsList],
   template: `
     <div class="space-y-10">
-      <h2 class="text-2xl font-semibold">Administration de l’entreprise</h2>
+      <h1 class="text-2xl font-semibold">Administration de l’entreprise</h1>
       <app-users-list />
       <app-invitations-list />
     </div>

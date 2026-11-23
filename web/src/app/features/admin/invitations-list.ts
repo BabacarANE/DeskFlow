@@ -18,7 +18,7 @@ const PAGE_SIZE = 20;
   imports: [DatePipe, ReactiveFormsModule, FieldError, Pager, StatusMessage],
   template: `
     <section class="card space-y-6" aria-labelledby="invitations-title">
-      <h3 id="invitations-title" class="text-xl font-semibold">Invitations</h3>
+      <h2 id="invitations-title" class="text-xl font-semibold">Invitations</h2>
 
       <form
         class="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-start"
