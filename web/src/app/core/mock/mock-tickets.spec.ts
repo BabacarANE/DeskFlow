@@ -192,6 +192,18 @@ describe('mock backend (tickets)', () => {
     expect(missing.status).toBe(422);
   });
 
+  it('refuses a PATCH to the current status with 409 invalid-transition', async () => {
+    await firstValueFrom(api.demoLogin('agent'));
+    const ticket = await openTicket();
+    const err = await fail(
+      firstValueFrom(
+        api.updateTicket(ticket.id, { rowVersion: ticket.rowVersion, status: ticket.status }),
+      ),
+    );
+    expect(err.status).toBe(409);
+    expect(err.problem?.type?.endsWith('invalid-transition')).toBe(true);
+  });
+
   it('assigns, unassigns and recategorises; refuses unknown assignees with 422', async () => {
     await firstValueFrom(api.demoLogin('agent'));
     const assignees = await firstValueFrom(api.listAssignees());

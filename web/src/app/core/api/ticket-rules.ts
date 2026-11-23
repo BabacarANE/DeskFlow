@@ -1,4 +1,4 @@
-import { Role, TicketStatus, TicketSummary } from './models';
+import { Role, TicketDetail, TicketStatus, TicketSummary } from './models';
 
 /** Mirror of the contract (SPEC section 6): the only valid status transitions. */
 export const TRANSITIONS: Record<TicketStatus, readonly TicketStatus[]> = {
@@ -19,14 +19,23 @@ export function isAgentRole(role: Role | null | undefined): boolean {
 }
 
 /**
- * True while the SLA clock runs (New or Open) and a deadline is behind us.
- * The response deadline only counts while the ticket is still New (no agent has taken it).
+ * SLA alert of the list. TicketSummary has no firstResponseAt, so the response deadline is never
+ * used here: a ticket is late when its resolution deadline passed or it was escalated, while the
+ * clock runs (New or Open).
  */
 export function isSlaBreached(ticket: TicketSummary, now: Date = new Date()): boolean {
   if (ticket.status !== 'New' && ticket.status !== 'Open') return false;
-  const deadlines = [
-    ticket.resolutionDueAt ?? null,
-    ticket.status === 'New' ? (ticket.responseDueAt ?? null) : null,
-  ];
-  return deadlines.some((d) => d !== null && new Date(d).getTime() < now.getTime());
+  if (ticket.escalatedAt) return true;
+  return isPast(ticket.resolutionDueAt, now);
+}
+
+/** SLA alert of the detail: also late when no agent answered before the response deadline. */
+export function isSlaBreachedDetail(ticket: TicketDetail, now: Date = new Date()): boolean {
+  if (isSlaBreached(ticket, now)) return true;
+  if (ticket.status !== 'New' && ticket.status !== 'Open') return false;
+  return !ticket.firstResponseAt && isPast(ticket.responseDueAt, now);
+}
+
+function isPast(date: string | null | undefined, now: Date): boolean {
+  return !!date && new Date(date).getTime() < now.getTime();
 }

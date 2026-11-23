@@ -124,6 +124,16 @@ describe('TicketList', () => {
     expect(rows[1].querySelector('.badge-accent')).toBeNull();
   });
 
+  it('shows the SLA alert to agents only', async () => {
+    const late = summary('t1', { status: 'Open', resolutionDueAt: '2020-01-01T00:00:00Z' });
+    api.listTickets.mockReturnValue(of(page([late])));
+    await render('Agent');
+    expect(el().textContent).toContain('Échéance SLA dépassée');
+    TestBed.resetTestingModule();
+    await render('Requester');
+    expect(el().textContent).not.toContain('Échéance SLA dépassée');
+  });
+
   it('sends status, priority, category and assignee filters to the API', async () => {
     await render();
     await choose('filter-status', 'Resolved');

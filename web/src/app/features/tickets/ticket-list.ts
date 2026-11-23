@@ -55,11 +55,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
 
         <div>
           <label for="filter-status" class="mb-1 block text-sm font-medium">Statut</label>
-          <select
-            id="filter-status"
-            class="field"
-            (change)="setFilter('status', $any($event.target).value)"
-          >
+          <select id="filter-status" class="field" (change)="setFilter('status', value($event))">
             <option value="" [selected]="state.filters().status === ''">Tous les statuts</option>
             @for (status of statuses; track status) {
               <option [value]="status" [selected]="state.filters().status === status">
@@ -74,7 +70,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
           <select
             id="filter-priority"
             class="field"
-            (change)="setFilter('priority', $any($event.target).value)"
+            (change)="setFilter('priority', value($event))"
           >
             <option value="" [selected]="state.filters().priority === ''">
               Toutes les priorités
@@ -93,7 +89,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
             <select
               id="filter-assignee"
               class="field"
-              (change)="setFilter('assignee', $any($event.target).value)"
+              (change)="setFilter('assignee', value($event))"
             >
               <option value="" [selected]="state.filters().assignee === ''">Tout le monde</option>
               <option value="me" [selected]="state.filters().assignee === 'me'">Moi</option>
@@ -114,7 +110,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
           <select
             id="filter-category"
             class="field"
-            (change)="setFilter('categoryId', $any($event.target).value)"
+            (change)="setFilter('categoryId', value($event))"
           >
             <option value="" [selected]="state.filters().categoryId === ''">
               Toutes les catégories
@@ -129,11 +125,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
 
         <div>
           <label for="filter-sort" class="mb-1 block text-sm font-medium">Trier par</label>
-          <select
-            id="filter-sort"
-            class="field"
-            (change)="setFilter('sort', $any($event.target).value)"
-          >
+          <select id="filter-sort" class="field" (change)="setFilter('sort', value($event))">
             @for (sort of sorts; track sort) {
               <option [value]="sort" [selected]="state.filters().sort === sort">
                 {{ sortLabels[sort] }}
@@ -147,7 +139,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
           <select
             id="filter-direction"
             class="field"
-            (change)="setFilter('direction', $any($event.target).value)"
+            (change)="setFilter('direction', value($event))"
           >
             <option value="desc" [selected]="state.filters().direction === 'desc'">
               Décroissant
@@ -220,7 +212,7 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
                         @if (ticket.category) {
                           <span class="block text-ink-muted">{{ ticket.category.name }}</span>
                         }
-                        @if (breached(ticket)) {
+                        @if (isAgent() && breached(ticket)) {
                           <app-sla-badge />
                         }
                       </td>
@@ -278,7 +270,12 @@ export class TicketList implements OnInit {
     void this.loadOptions();
   }
 
-  protected breached = isSlaBreached;
+  protected readonly breached = isSlaBreached;
+
+  /** Value of the control that fired a change event. */
+  protected value(event: Event): string {
+    return (event.target as HTMLInputElement | HTMLSelectElement).value;
+  }
 
   protected setFilter<K extends keyof TicketFilters>(key: K, value: string): void {
     void this.state.setFilters({ [key]: value as TicketFilters[K] });

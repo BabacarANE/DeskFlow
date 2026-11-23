@@ -433,7 +433,8 @@ function updateTicket(ctx: MockContext, t: MockTicket): MockResult {
   }
   if (Object.keys(errors).length > 0) return problem(422, 'Validation failed', undefined, errors);
 
-  if (req.status !== undefined && req.status !== t.status) {
+  // Any status not listed as a transition is refused, including the current one.
+  if (req.status !== undefined) {
     if (!TRANSITIONS[t.status].includes(req.status)) {
       return problem(
         409,
