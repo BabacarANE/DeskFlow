@@ -60,6 +60,7 @@ public sealed class ProbeConsumer(DeskDbContext db, ITenantContext tenant, Probe
 public sealed class TestWorker : IAsyncDisposable
 {
     private readonly IHost _host;
+    private int _disposed;
 
     private TestWorker(IHost host) => _host = host;
 
@@ -121,6 +122,7 @@ public sealed class TestWorker : IAsyncDisposable
         var host = builder.Build();
         await host.StartAsync();
         var worker = new TestWorker(host);
+        await host.Services.GetRequiredService<MessagingTopology>().EnsureDeclaredAsync(CancellationToken.None);
         if (consumers && waitForConsumers)
         {
             await host.Services.GetRequiredService<ConsumerReadiness>().Ready.WaitAsync(TimeSpan.FromSeconds(30));
@@ -146,8 +148,11 @@ public sealed class TestWorker : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _host.StopAsync();
-        _host.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            await _host.StopAsync();
+            _host.Dispose();
+        }
     }
 }
 
@@ -207,12 +212,21 @@ public abstract class MessagingTestBase(PostgresFixture postgres, RabbitMqFixtur
         var tenant = new Tenant { Name = "Entreprise " + slug, Slug = slug, CreatedAt = DateTimeOffset.UtcNow };
         var requester = new User
         {
-            TenantId = tenant.Id, Email = $"req@{slug}.test", DisplayName = "Camille Demandeur", Role = Role.Requester, CreatedAt = DateTimeOffset.UtcNow,
+            TenantId = tenant.Id,
+            Email = $"req@{slug}.test",
+            DisplayName = "Camille Demandeur",
+            Role = Role.Requester,
+            CreatedAt = DateTimeOffset.UtcNow,
         };
         var ticket = new Ticket
         {
-            TenantId = tenant.Id, Number = 1, Title = title, Description = "Impossible de me connecter.",
-            RequesterId = requester.Id, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+            TenantId = tenant.Id,
+            Number = 1,
+            Title = title,
+            Description = "Impossible de me connecter.",
+            RequesterId = requester.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.Tenants.Add(tenant);
         db.Users.Add(requester);
@@ -238,7 +252,10 @@ public abstract class MessagingTestBase(PostgresFixture postgres, RabbitMqFixtur
         {
             db.OutboxMessages.Add(new OutboxMessage
             {
-                Id = envelope.MessageId, Type = envelope.Type, Payload = envelope.ToJson(), CreatedAt = envelope.OccurredAt,
+                Id = envelope.MessageId,
+                Type = envelope.Type,
+                Payload = envelope.ToJson(),
+                CreatedAt = envelope.OccurredAt,
             });
         }
 

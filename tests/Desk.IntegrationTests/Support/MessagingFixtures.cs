@@ -74,7 +74,9 @@ public sealed class TestBroker(string uri) : IAsyncDisposable
 
     public async Task<IChannel> ChannelAsync() => await (await ConnectionAsync()).CreateChannelAsync();
 
-    public async Task PublishAsync(string exchange, string routingKey, byte[] body, int attempt = 0, string? tenantId = null, string? messageId = null)
+    public async Task PublishAsync(
+        string exchange, string routingKey, byte[] body, int attempt = 0, string? tenantId = null, string? messageId = null,
+        IReadOnlyDictionary<string, object?>? extraHeaders = null)
     {
         await using var channel = await (await ConnectionAsync()).CreateChannelAsync(new CreateChannelOptions(true, true));
         var headers = new Dictionary<string, object?> { ["attempt"] = attempt };
@@ -86,6 +88,11 @@ public sealed class TestBroker(string uri) : IAsyncDisposable
         if (messageId is not null)
         {
             headers["message-id"] = messageId;
+        }
+
+        foreach (var (key, value) in extraHeaders ?? new Dictionary<string, object?>())
+        {
+            headers[key] = value;
         }
 
         await channel.BasicPublishAsync(exchange, routingKey, false,

@@ -276,13 +276,13 @@ public abstract class ApiTestBase(PostgresFixture postgres) : IAsyncLifetime
 
     protected HttpClient Http { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         Factory = new DeskFactory(await postgres.CreateDatabaseAsync(), Settings, OAuthConfigured);
         Http = Factory.NewClient();
     }
 
-    public async Task DisposeAsync()
+    public virtual async Task DisposeAsync()
     {
         Http.Dispose();
         await Factory.DisposeAsync();
