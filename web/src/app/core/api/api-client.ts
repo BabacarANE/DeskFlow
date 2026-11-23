@@ -26,10 +26,7 @@ export class ApiClient {
 
   /** Full-page navigation target that starts the OAuth flow (a 302 to the provider). */
   externalLoginUrl(provider: Provider, invitation?: string | null): string {
-    if (environment.mock) {
-      // No OAuth in mock mode: show the callback error screens instead.
-      return `/auth/callback?error=${invitation ? 'invitation_invalid' : 'invitation_required'}`;
-    }
+    if (environment.mockExternalLoginUrl) return environment.mockExternalLoginUrl(invitation);
     const query = invitation ? `?invitation=${encodeURIComponent(invitation)}` : '';
     return `${API_BASE}/auth/external/${provider}${query}`;
   }
