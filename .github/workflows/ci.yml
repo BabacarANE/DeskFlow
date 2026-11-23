@@ -39,6 +39,7 @@ jobs:
       - run: npm run lint
       - run: npm test -- --no-watch
       - run: npm run build
+      - run: npm run check:no-mock
 
   docker:
     runs-on: ubuntu-latest
