@@ -42,7 +42,7 @@ public sealed class DlqReplayer(RabbitConnections connections, ILogger<DlqReplay
             await ReplayCoreAsync(options, progress, ct);
             return progress.ToReport();
         }
-        catch (Exception ex) when (IsBrokerFailure(ex))
+        catch (Exception ex) when (IsBrokerFailure(ex) && ex is not RabbitMQ.Client.Exceptions.BrokerUnreachableException)
         {
             // Not confirmed means not acknowledged: those messages are still in the DLQ.
             throw new ReplayInterruptedException(progress.ToReport(), ex);
