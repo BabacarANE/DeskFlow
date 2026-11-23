@@ -52,6 +52,17 @@ body {
     @apply border border-line bg-surface text-ink-muted;
   }
 
+  .badge-primary {
+    @apply bg-primary text-(--on-primary);
+  }
+  .badge-outline {
+    @apply border border-ink bg-card;
+  }
+  /* Urgent priority and SLA alerts: the only small uses of the accent besides the main button. */
+  .badge-accent {
+    @apply bg-accent text-(--on-accent);
+  }
+
   .table-wrap {
     @apply overflow-x-auto;
   }
