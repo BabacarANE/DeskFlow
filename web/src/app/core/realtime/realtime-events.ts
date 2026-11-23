@@ -17,27 +17,33 @@ export type RealtimeEvent =
   | ({ kind: 'ticketAssigned' } & Base)
   | ({ kind: 'ticketReplied' } & Base);
 
-/** Validates a hub payload; anything that does not match the contract is dropped. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PRIORITY_VALUES: readonly string[] = ['Low', 'Normal', 'High', 'Urgent'];
+const MAX_TITLE_LENGTH = 300;
+
+/** Validates a hub payload strictly; anything that does not match the contract is dropped silently. */
 export function parseEvent(kind: HubMethod, payload: unknown): RealtimeEvent | null {
   if (typeof payload !== 'object' || payload === null) return null;
   const p = payload as Record<string, unknown>;
+  const { ticketId, number, title, at } = p;
   if (
-    typeof p['ticketId'] !== 'string' ||
-    typeof p['number'] !== 'number' ||
-    typeof p['title'] !== 'string' ||
-    typeof p['at'] !== 'string'
+    typeof ticketId !== 'string' ||
+    !UUID.test(ticketId) ||
+    typeof number !== 'number' ||
+    !Number.isSafeInteger(number) ||
+    number < 1 ||
+    typeof title !== 'string' ||
+    title.length > MAX_TITLE_LENGTH ||
+    typeof at !== 'string' ||
+    Number.isNaN(Date.parse(at))
   ) {
     return null;
   }
-  const base: Base = {
-    ticketId: p['ticketId'],
-    number: p['number'],
-    title: p['title'],
-    at: p['at'],
-  };
+  const base: Base = { ticketId, number, title, at };
   if (kind === 'ticketCreated') {
-    return typeof p['priority'] === 'string'
-      ? { kind, ...base, priority: p['priority'] as TicketPriority }
+    const priority = p['priority'];
+    return typeof priority === 'string' && PRIORITY_VALUES.includes(priority)
+      ? { kind, ...base, priority: priority as TicketPriority }
       : null;
   }
   return { kind, ...base };
