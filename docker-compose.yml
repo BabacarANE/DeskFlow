@@ -28,7 +28,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
     ports: ["${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"]
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # Run as the rabbitmq user: as root, the CLI creates a root-owned .erlang.cookie (docs/troubleshooting/001)
+      test: ["CMD-SHELL", "su-exec rabbitmq rabbitmq-diagnostics -q ping"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -48,9 +49,25 @@ services:
       context: .
       dockerfile: docker/dotnet.Dockerfile
       args: { PROJECT: Desk.Api }
-    environment: *dotnet-env
-    ports: ["${API_PORT:-5148}:8080"]
+    environment:
+      <<: *dotnet-env
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      Database__MigrateOnStartup: "true"
+      Jwt__Key: ${JWT_KEY:?set JWT_KEY (32+ characters) in .env}
+      Demo__Enabled: ${DEMO_ENABLED:-true}
+      SuperAdmin__Email: ${SUPERADMIN_EMAIL:-}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__UseTls: "false"
+      Smtp__From: ${SMTP_FROM:-DeskFlow <no-reply@deskflow.local>}
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      Authentication__GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
+      Authentication__GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
+    ports: ["127.0.0.1:${API_PORT:-5148}:8080"]  # loopback only: nginx is the public entry (X-Forwarded-For is trusted)
     depends_on:
+      mailpit: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
