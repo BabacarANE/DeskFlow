@@ -6,6 +6,8 @@ import { join } from 'node:path';
 const dir = join('dist', 'web', 'browser');
 const markers = [
   'deskflow.mock',
+  'deskflow.mock.realtime',
+  'deskflowMockRealtime',
   'mock-access-token',
   'mock.local',
   'deskflow.example/problems',
