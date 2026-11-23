@@ -23,7 +23,8 @@ public sealed record Actor(Guid Id, Role Role)
 /// </summary>
 public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeProvider clock)
 {
-    private const int MaxAttempts = 3;
+    // Concurrent comments on one ticket queue up on its row version: allow enough rounds for a burst.
+    private const int MaxAttempts = 10;
 
     /// <summary>PostgreSQL keeps microseconds: truncate so that what we return equals what is stored.</summary>
     private DateTimeOffset Now()

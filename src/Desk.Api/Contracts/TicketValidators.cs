@@ -34,6 +34,8 @@ public sealed class UpdateTicketRequestValidator : AbstractValidator<UpdateTicke
     {
         RuleFor(x => x.RowVersion).NotEmpty().Must(v => RowVersions.TryParse(v, out _))
             .WithMessage("rowVersion invalide : renvoyez la valeur reçue.");
+        RuleFor(x => x.AssigneeId).Must(v => !v.Malformed).WithMessage("assigneeId doit être un UUID ou null.");
+        RuleFor(x => x.CategoryId).Must(v => !v.Malformed).WithMessage("categoryId doit être un UUID ou null.");
         RuleFor(x => x.Status!).Must(EnumNames.IsValid<TicketStatus>).When(x => x.Status is not null)
             .WithMessage("Statut invalide : New, Open, Pending, Resolved ou Closed.");
         RuleFor(x => x.Priority!).Must(EnumNames.IsValid<Priority>).When(x => x.Priority is not null)

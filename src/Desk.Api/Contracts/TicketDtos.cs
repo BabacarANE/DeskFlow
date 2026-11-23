@@ -93,7 +93,8 @@ public static class RowVersions
 
 /// <summary>A PATCH property that tells "absent" (unchanged) from <c>null</c> (clear) from a value.</summary>
 [JsonConverter(typeof(OptionalGuidConverter))]
-public readonly record struct OptionalGuid(bool IsSet, Guid? Value);
+/// <param name="Malformed">The value was present but is not a UUID: reported as a 422 by the validator.</param>
+public readonly record struct OptionalGuid(bool IsSet, Guid? Value, bool Malformed = false);
 
 public sealed class OptionalGuidConverter : JsonConverter<OptionalGuid>
 {
@@ -111,7 +112,8 @@ public sealed class OptionalGuidConverter : JsonConverter<OptionalGuid>
             return new OptionalGuid(true, id);
         }
 
-        throw new JsonException("Identifiant invalide (UUID attendu).");
+        using var _ = JsonDocument.ParseValue(ref reader); // consumes the whole value, objects and arrays included
+        return new OptionalGuid(true, null, Malformed: true);
     }
 
     public override void Write(Utf8JsonWriter writer, OptionalGuid value, JsonSerializerOptions options)
