@@ -272,3 +272,34 @@ public class ExternalIdentityTests
     [Fact]
     public void UnknownProvider_HasNoScheme() => Assert.Null(ExternalProviders.SchemeFor("facebook"));
 }
+
+public class JwtKeyPolicyTests
+{
+    [Theory]
+    [InlineData("short")]
+    [InlineData("0123456789012345678901234567890")]
+    public void TooShortKey_IsRefused_Everywhere(string key)
+    {
+        Assert.Throws<InvalidOperationException>(() => JwtKeyPolicy.Validate(key, isProduction: true));
+        Assert.Throws<InvalidOperationException>(() => JwtKeyPolicy.Validate(key, isProduction: false));
+    }
+
+    [Theory]
+    [InlineData("change-me-32-chars-minimum-xxxxxxxxx")]
+    [InlineData("CHANGE-ME-with-a-long-enough-suffix-1234")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [InlineData("abababababababababababababababababababab")]
+    public void PlaceholderOrFakeKey_IsRefused_InProduction(string key)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => JwtKeyPolicy.Validate(key, isProduction: true));
+        Assert.Contains("Jwt:Key", ex.Message);
+    }
+
+    [Fact]
+    public void RandomKey_IsAccepted_InProduction() =>
+        JwtKeyPolicy.Validate(Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48)), isProduction: true);
+
+    [Fact]
+    public void PlaceholderKey_RemainsUsable_OutsideProduction() =>
+        JwtKeyPolicy.Validate("change-me-32-chars-minimum-xxxxxxxxx", isProduction: false);
+}

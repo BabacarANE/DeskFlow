@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using Desk.Core.Tenancy;
 using Desk.Infrastructure.Auth;
 using Desk.Infrastructure.Email;
@@ -38,10 +37,7 @@ public static class InfrastructureExtensions
                 : Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
         }
 
-        if (Encoding.UTF8.GetByteCount(jwt.Key) < 32)
-        {
-            throw new InvalidOperationException("Jwt:Key must be at least 32 bytes long.");
-        }
+        JwtKeyPolicy.Validate(jwt.Key, isProduction);
 
         services.AddSingleton(jwt);
         services.AddScoped<JwtTokenService>();
