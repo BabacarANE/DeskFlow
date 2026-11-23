@@ -7,7 +7,7 @@ import {
 } from '@angular/router';
 import { Role } from '../api/models';
 import { AuthService } from './auth.service';
-import { guestGuard, roleGuard } from './guards';
+import { guestGuard, homeGuard, roleGuard } from './guards';
 
 describe('guards', () => {
   let session: boolean;
@@ -62,5 +62,20 @@ describe('guards', () => {
     expect(await run(guestGuard)).toBe('/platform/tenants');
     role = 'Requester';
     expect(await run(guestGuard)).toBe('/tickets');
+  });
+
+  it('sends each role from / to its own landing page, a SuperAdmin never to /forbidden', async () => {
+    role = 'SuperAdmin';
+    expect(await run(homeGuard)).toBe('/platform/tenants');
+    role = 'TenantAdmin';
+    expect(await run(homeGuard)).toBe('/admin');
+    role = 'Agent';
+    expect(await run(homeGuard)).toBe('/tickets');
+  });
+
+  it('sends an anonymous visitor from / to /login', async () => {
+    session = false;
+    role = null;
+    expect(await run(homeGuard)).toBe('/login');
   });
 });

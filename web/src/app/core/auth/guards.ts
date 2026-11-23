@@ -27,3 +27,11 @@ export const guestGuard: CanActivateFn = async () => {
   const role = auth.role();
   return role ? router.createUrlTree([homeFor(role)]) : true;
 };
+
+/** Root redirect: each role goes to its own landing page, visitors to /login. */
+export const homeGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  const role = (await auth.restoreSession()) ? auth.role() : null;
+  return router.createUrlTree([role ? homeFor(role) : '/login']);
+};

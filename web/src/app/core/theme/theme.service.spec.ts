@@ -47,6 +47,13 @@ describe('contrast helpers', () => {
     expect(onColorFor('#FFE08A')).toBe('dark');
   });
 
+  it('compares with the real dark text colour, not pure black', () => {
+    // Mid grey: pure black would win (5.0:1), but the real dark text (about 3.5:1) loses to white (4.2:1).
+    const dark = luminance('#0B2A3C');
+    expect(onColorFor('#7C7C7C')).toBe('dark');
+    expect(onColorFor('#7C7C7C', dark, 1)).toBe('light');
+  });
+
   it('warns when the accent has less than 3:1 against the surface', () => {
     expect(accentContrastWarning('#D63A14', '#F4F7FA')).toBe(false);
     expect(accentContrastWarning('#E8EEF3', '#F4F7FA')).toBe(true);
@@ -73,6 +80,18 @@ describe('ThemeService', () => {
     // Dark primary needs white text, bright yellow accent needs dark text.
     expect(read('--on-primary')).toBe('var(--on-light)');
     expect(read('--on-accent')).toBe('var(--on-dark)');
+  });
+
+  it('reads --on-dark from the document to choose the text colour', () => {
+    document.documentElement.style.setProperty('--on-dark', '#0B2A3C');
+    document.documentElement.style.setProperty('--on-light', '#FFFFFF');
+    try {
+      service.apply({ colorPrimary: '#7C7C7C', colorSurface: '#FAFAFA', colorAccent: '#FFD400' });
+      expect(read('--on-primary')).toBe('var(--on-light)');
+    } finally {
+      document.documentElement.style.removeProperty('--on-dark');
+      document.documentElement.style.removeProperty('--on-light');
+    }
   });
 
   it('uses the default palette contrast choices', () => {

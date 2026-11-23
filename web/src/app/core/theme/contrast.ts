@@ -26,18 +26,26 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-/** Contrast ratio between a background and pure white or pure black text. */
-export function contrastWithWhite(background: string): number {
-  return 1.05 / (luminance(background) + 0.05);
+/** Contrast ratio between a background and a text colour given by its relative luminance. */
+function contrastWithLuminance(background: string, textLuminance: number): number {
+  const a = luminance(background) + 0.05;
+  const b = textLuminance + 0.05;
+  return Math.max(a, b) / Math.min(a, b);
 }
 
-export function contrastWithBlack(background: string): number {
-  return (luminance(background) + 0.05) / 0.05;
-}
-
-/** Text on this background should be dark ("dark") or white ("light"), whichever reads better. */
-export function onColorFor(background: string): 'dark' | 'light' {
-  return contrastWithWhite(background) >= contrastWithBlack(background) ? 'light' : 'dark';
+/**
+ * Text on this background should be dark ("dark") or light ("light"), whichever reads better.
+ * Luminances are those of the real --on-dark and --on-light values (defaults: black and white).
+ */
+export function onColorFor(
+  background: string,
+  darkLuminance = 0,
+  lightLuminance = 1,
+): 'dark' | 'light' {
+  return contrastWithLuminance(background, lightLuminance) >=
+    contrastWithLuminance(background, darkLuminance)
+    ? 'light'
+    : 'dark';
 }
 
 /** Non-blocking warning: the accent should keep at least 3:1 against the surface. */

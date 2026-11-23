@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Theme } from '../api/models';
-import { isHexColor, onColorFor } from './contrast';
+import { isHexColor, luminance, onColorFor } from './contrast';
 
 const MANAGED_PROPERTIES = [
   '--color-primary',
@@ -40,6 +40,14 @@ export class ThemeService {
   }
 
   private onVariable(background: string): string {
-    return onColorFor(background) === 'dark' ? 'var(--on-dark)' : 'var(--on-light)';
+    const dark = this.luminanceOf('--on-dark', 0);
+    const light = this.luminanceOf('--on-light', 1);
+    return onColorFor(background, dark, light) === 'dark' ? 'var(--on-dark)' : 'var(--on-light)';
+  }
+
+  /** Luminance of a token defined in tokens.css, so the choice uses the real text colours. */
+  private luminanceOf(token: string, fallback: number): number {
+    const value = getComputedStyle(this.root).getPropertyValue(token).trim();
+    return isHexColor(value) ? luminance(value) : fallback;
   }
 }

@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
-import { guestGuard, roleGuard } from './core/auth/guards';
+import { guestGuard, homeGuard, roleGuard } from './core/auth/guards';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'tickets' },
+  { path: '', pathMatch: 'full', canActivate: [homeGuard], children: [] },
   {
     path: 'login',
     canActivate: [guestGuard],
