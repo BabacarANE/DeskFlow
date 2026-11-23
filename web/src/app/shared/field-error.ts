@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
 import { AbstractControl, FormGroup } from '@angular/forms';
 import { ApiError } from '../core/api/api-error';
 
@@ -13,6 +13,7 @@ const MESSAGES: Record<string, (e: Record<string, unknown>) => string> = {
 /** Shows the first validation message of a control once it has been touched. */
 @Component({
   selector: 'app-field-error',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (message(); as text) {
       <p class="mt-1 text-sm font-medium" role="alert">{{ text }}</p>
@@ -22,7 +23,11 @@ const MESSAGES: Record<string, (e: Record<string, unknown>) => string> = {
 export class FieldError {
   readonly control = input.required<AbstractControl>();
 
-  protected message(): string | null {
+  /** Bumped on every touched, status or value event of the control, so the OnPush view refreshes. */
+  private readonly changes = signal(0);
+
+  protected readonly message = computed(() => {
+    this.changes();
     const control = this.control();
     if (!control.errors || !(control.touched || control.dirty)) return null;
     for (const key of Object.keys(control.errors)) {
@@ -30,6 +35,13 @@ export class FieldError {
       if (format) return format((control.errors[key] ?? {}) as Record<string, unknown>);
     }
     return 'Valeur invalide.';
+  });
+
+  constructor() {
+    effect((onCleanup) => {
+      const subscription = this.control().events.subscribe(() => this.changes.update((n) => n + 1));
+      onCleanup(() => subscription.unsubscribe());
+    });
   }
 }
 

@@ -3,11 +3,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 import { App } from './app';
 import { Me } from './core/api/models';
 import { AuthService } from './core/auth/auth.service';
 import { ThemeService } from './core/theme/theme.service';
-import { TicketsHome } from './features/tickets/tickets-home';
+import { ApiClient } from './core/api/api-client';
+import { TicketList } from './features/tickets/ticket-list';
 
 const DARK_THEME = { colorPrimary: '#101820', colorSurface: '#FAFAFA', colorAccent: '#FFD400' };
 
@@ -28,7 +30,15 @@ describe('App', () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
-        provideRouter([{ path: 'tickets', component: TicketsHome }]),
+        provideRouter([{ path: 'tickets', component: TicketList }]),
+        {
+          provide: ApiClient,
+          useValue: {
+            listTickets: () => of({ items: [], total: 0, page: 1, pageSize: 20 }),
+            listCategories: () => of([]),
+            listAssignees: () => of([]),
+          },
+        },
         provideHttpClient(),
         provideHttpClientTesting(),
         {
@@ -59,7 +69,7 @@ describe('App', () => {
     await fixture.whenStable();
     const titles = (fixture.nativeElement as HTMLElement).querySelectorAll('h1');
     expect(titles).toHaveLength(1);
-    expect(titles[0].textContent).toContain('Bonjour Alice');
+    expect(titles[0].textContent).toContain('Tickets');
   });
 
   it('keeps the navigation readable with a dark primary colour', async () => {

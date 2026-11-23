@@ -50,8 +50,17 @@ Teintes dérivées, calculées avec `color-mix()` : elles suivent le thème sans
 
 ## Composants utilitaires (`src/styles.css`, couche `components`)
 
-`.card`, `.btn`, `.btn-accent`, `.btn-secondary`, `.btn-small`, `.field`, `.badge`, `.badge-muted`, `.table-wrap`, `.table`.
+`.card`, `.btn`, `.btn-accent`, `.btn-secondary`, `.btn-small`, `.field`, `.badge`, `.badge-muted`, `.badge-primary`, `.badge-outline`, `.badge-accent`, `.table-wrap`, `.table`.
 Ils n'utilisent que les tokens ci-dessus.
+
+## Tickets (phase 2)
+
+- Badges de statut et de priorité : le texte dit toujours la valeur, la couleur ne fait que la renforcer. Nouveau : `.badge-primary` ; Ouvert et Normale : `.badge` ; En attente, Fermé et Basse : `.badge-muted` ; Résolu et Haute : `.badge-outline`.
+- L'accent est réservé à Urgente (`.badge-accent`) et à l'alerte « Échéance SLA dépassée » (même classe, texte `--on-accent`), en plus du bouton principal de l'écran (« Nouveau ticket », « Créer le ticket », « Envoyer »).
+- Une note interne est visuellement distincte : bordure en tirets `border-ink`, fond `bg-primary-soft` et mention « Note interne, invisible pour le demandeur » (jamais la couleur seule). Les notes ne sont envoyées par l'API qu'aux agents.
+- Le changement de statut propose uniquement les transitions valides (`core/api/ticket-rules.ts`, miroir du contrat).
+- Échéance SLA dépassée (`isSlaBreached`) : ticket `New` ou `Open` dont l'échéance de résolution est passée (ou de première réponse pour `New`). Le SLA est suspendu en `Pending`.
+- Les filtres de la liste survivent à une visite d'un ticket (`TicketListState`, fourni à la racine).
 
 ## Gabarit d'écran
 
@@ -66,4 +75,5 @@ Ils n'utilisent que les tokens ci-dessus.
 `npm run start:mock` lance l'application avec un backend simulé en mémoire (`core/mock`).
 La démo propose les trois profils ; pour essayer l'écran SuperAdmin, exécuter dans la console du navigateur :
 `sessionStorage.setItem('deskflow.mock.role', 'superadmin'); location.reload();`.
+Le backend simulé suit le contrat figé `docs/api/openapi.json` pour les tickets (`core/mock/mock-tickets.ts`) : transitions valides, `rowVersion` et 409, notes internes masquées au demandeur, filtres, tri et pagination. Une trentaine de tickets de démonstration permettent de voir la pagination et les échéances dépassées.
 `npm start` utilise le proxy `proxy.conf.json` vers l'API sur `http://localhost:5148`.

@@ -20,6 +20,7 @@ import {
   UpdateUserRequest,
   User,
 } from '../api/models';
+import { MockResult, handleTicketRoutes, resetMockTickets } from './mock-tickets';
 
 /**
  * Simulated backend for developing and testing without the API (`npm run start:mock`).
@@ -31,7 +32,12 @@ import {
  */
 
 const SESSION_KEY = 'deskflow.mock.role';
-const LATENCY_MS = 250;
+let latencyMs = 250;
+
+/** Test helper: the simulated network delay (milliseconds). */
+export function setMockLatency(ms: number): void {
+  latencyMs = ms;
+}
 
 type MockRole = DemoRole | 'superadmin';
 
@@ -151,17 +157,24 @@ let state = seed();
 /** Test helper: restores the initial data set. */
 export function resetMockBackend(): void {
   state = seed();
+  resetMockTickets();
 }
 
-function problem(status: number, title: string, errors?: Record<string, string[]>) {
+function problem(status: number, title: string, errors?: Record<string, string[]>, type?: string) {
   return throwError(
     () =>
       new HttpErrorResponse({
         status,
         statusText: title,
-        error: { title, status, ...(errors ? { errors } : {}) },
+        error: { title, status, ...(type ? { type } : {}), ...(errors ? { errors } : {}) },
       }),
   );
+}
+
+function fromResult(result: MockResult): Observable<HttpEvent<unknown>> {
+  return result.problem
+    ? problem(result.status, result.problem.title, result.problem.errors, result.problem.type)
+    : ok(result.body ?? null, result.status);
 }
 
 function ok<T>(body: T, status = 200): Observable<HttpEvent<unknown>> {
@@ -216,6 +229,18 @@ function handle(
   if (method === 'GET' && path === '/me') {
     const role = currentRole();
     return role ? ok(ME_BY_ROLE[role]) : problem(401, 'Unauthorized');
+  }
+
+  const ticketResult = handleTicketRoutes({
+    me: ME_BY_ROLE[currentRole() ?? 'demandeur'],
+    users: state.users,
+    method,
+    path,
+    query,
+    body,
+  });
+  if (ticketResult) {
+    return currentRole() ? fromResult(ticketResult) : problem(401, 'Unauthorized');
   }
 
   if (path === '/users' || path.startsWith('/users/') || path.startsWith('/invitations')) {
@@ -302,5 +327,5 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req) => {
   if (!req.url.startsWith(API_BASE)) return of(new HttpResponse({ status: 404 }));
   const url = new URL(req.urlWithParams, 'http://mock.local');
   const path = url.pathname.slice(API_BASE.length);
-  return handle(req.method, path, url.searchParams, req.body).pipe(delay(LATENCY_MS));
+  return handle(req.method, path, url.searchParams, req.body).pipe(delay(latencyMs));
 };

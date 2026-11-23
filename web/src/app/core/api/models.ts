@@ -102,6 +102,117 @@ export interface Page<T> {
   pageSize: number;
 }
 
+// Phase 2 contract: tickets, comments, categories, assignees, events.
+
+export type TicketStatus = 'New' | 'Open' | 'Pending' | 'Resolved' | 'Closed';
+export type TicketPriority = 'Low' | 'Normal' | 'High' | 'Urgent';
+export type TicketSort = 'createdAt' | 'updatedAt' | 'priority' | 'number';
+export type SortDirection = 'asc' | 'desc';
+
+export interface UserRef {
+  id: string;
+  displayName: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export interface TicketSummary {
+  id: string;
+  /** Sequential per tenant. */
+  number: number;
+  title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category?: Category | null;
+  requester: UserRef;
+  assignee?: UserRef | null;
+  createdAt: string;
+  updatedAt: string;
+  responseDueAt?: string | null;
+  resolutionDueAt?: string | null;
+  escalatedAt?: string | null;
+}
+
+export interface Comment {
+  id: string;
+  author: UserRef;
+  body: string;
+  isInternal: boolean;
+  createdAt: string;
+}
+
+export interface TicketDetail extends TicketSummary {
+  description: string;
+  /** Opaque optimistic concurrency token, sent back as is in PATCH. */
+  rowVersion: string;
+  firstResponseAt?: string | null;
+  resolvedAt?: string | null;
+  /** Oldest first. */
+  comments: Comment[];
+}
+
+export interface CreateTicketRequest {
+  title: string;
+  description: string;
+  categoryId?: string | null;
+  /** Normal when omitted. */
+  priority?: TicketPriority;
+}
+
+export interface UpdateTicketRequest {
+  rowVersion: string;
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  /** Null removes the assignee. */
+  assigneeId?: string | null;
+  /** Null removes the category. */
+  categoryId?: string | null;
+}
+
+export interface CreateCommentRequest {
+  body: string;
+  isInternal?: boolean;
+}
+
+export type TicketEventType =
+  | 'Created'
+  | 'StatusChanged'
+  | 'PriorityChanged'
+  | 'AssigneeChanged'
+  | 'CategoryChanged';
+
+export interface TicketEvent {
+  id: string;
+  type: TicketEventType;
+  /** Null for a system event. */
+  actor?: UserRef | null;
+  oldValue?: string | null;
+  /** Status and priority as strings; assignee and category as the displayed name. */
+  newValue?: string | null;
+  at: string;
+}
+
+/** Query of GET /tickets. Absent keys are not sent. */
+export interface TicketQuery {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  assigneeId?: string;
+  unassigned?: boolean;
+  categoryId?: string;
+  q?: string;
+  sort?: TicketSort;
+  direction?: SortDirection;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Suffixes of the `type` URI of the 409 ProblemDetails (contract of PATCH /tickets/{id}). */
+export const PROBLEM_INVALID_TRANSITION = 'invalid-transition';
+export const PROBLEM_CONCURRENCY_CONFLICT = 'concurrency-conflict';
+
 /** Codes of /auth/callback?error=<code> listed in the contract. */
 export const AUTH_ERROR_CODES = [
   'invitation_required',
