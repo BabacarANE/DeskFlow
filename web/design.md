@@ -77,3 +77,11 @@ La démo propose les trois profils ; pour essayer l'écran SuperAdmin, exécuter
 `sessionStorage.setItem('deskflow.mock.role', 'superadmin'); location.reload();`.
 Le backend simulé suit le contrat figé `docs/api/openapi.json` pour les tickets (`core/mock/mock-tickets.ts`) : transitions valides, `rowVersion` et 409, notes internes masquées au demandeur, filtres, tri et pagination. Une trentaine de tickets de démonstration permettent de voir la pagination et les échéances dépassées.
 `npm start` utilise le proxy `proxy.conf.json` vers l'API sur `http://localhost:5148`.
+
+## Temps réel (phase 3)
+
+- Contrat : `docs/api/events.md` section 5 (hub `/hubs/notifications`, événements `ticketCreated`, `ticketAssigned`, `ticketReplied`). Seuls Agent et TenantAdmin se connectent ; SuperAdmin et Requester n'ouvrent aucune connexion.
+- `RealtimeService` : jeton lu en mémoire à chaque tentative (jamais stocké), reprise avec backoff (1 s à 30 s, jitter), jeton renouvelé avant chaque nouvel essai, arrêt à la déconnexion. Hors ligne = état discret, l'application reste utilisable.
+- Cloche (`shared/notification-bell.ts`) : bouton secondaire (jamais d'accent), compteur en texte dans `aria-label` et dans le badge, panneau CDK overlay (`role="dialog"`), flèches, Début, Fin, Échap, Tab en bord de liste ferme et rend le focus. Annonce `aria-live="polite"` à chaque arrivée. Liste en mémoire limitée à 50, sans persistance.
+- Un événement rafraîchit sans état de chargement la liste (anti-rebond 400 ms, filtres et saisie conservés) et le ticket affiché s'il est concerné (le `rowVersion` est mis à jour ; si une action est en cours, le rafraîchissement attend sa fin).
+- Faux hub (`npm run start:mock`, `core/realtime/hub-factory.mock.ts`) : silencieux par défaut. Console : `deskflowMockRealtime.start(10)`, `.emit('ticketReplied')`, `.stop()` ; ou `sessionStorage.setItem('deskflow.mock.realtime', '15'); location.reload();`.

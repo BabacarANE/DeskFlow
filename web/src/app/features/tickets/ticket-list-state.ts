@@ -110,6 +110,23 @@ export class TicketListState {
     await this.load();
   }
 
+  /**
+   * Refetches the current query without the loading state, so filters, typed text and focus stay
+   * untouched. Skipped while a regular load runs or after an error; failures are ignored.
+   */
+  async reloadQuietly(): Promise<void> {
+    if (this.status() !== 'ready') return;
+    const id = this.requestId;
+    try {
+      const result = await firstValueFrom(this.api.listTickets(this.query()));
+      if (id !== this.requestId || this.status() !== 'ready') return;
+      this.items.set(result.items);
+      this.total.set(result.total);
+    } catch {
+      // The next event or an explicit action retries.
+    }
+  }
+
   async load(): Promise<void> {
     const id = ++this.requestId;
     this.status.set('loading');
