@@ -11,9 +11,8 @@ namespace Desk.Infrastructure;
 
 public static class InfrastructureExtensions
 {
-    /// <summary>EF Core (PostgreSQL), tenant isolation, token services, e-mail.</summary>
-    public static IServiceCollection AddDeskIdentity(
-        this IServiceCollection services, IConfiguration configuration, bool isProduction)
+    /// <summary>EF Core (PostgreSQL) with tenant isolation: shared by the API and the Worker.</summary>
+    public static IServiceCollection AddDeskPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         var connection = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("ConnectionStrings:Postgres is not configured.");
@@ -26,6 +25,22 @@ public static class InfrastructureExtensions
         services.AddDbContext<DeskDbContext>((sp, options) => options
             .UseNpgsql(connection)
             .AddInterceptors(sp.GetRequiredService<TenantSaveChangesInterceptor>()));
+        return services;
+    }
+
+    /// <summary>SMTP sender (MailKit), shared by the API (invitations) and the Worker (notifications).</summary>
+    public static IServiceCollection AddDeskEmail(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<SmtpOptions>(configuration.GetSection("Smtp"));
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        return services;
+    }
+
+    /// <summary>EF Core (PostgreSQL), tenant isolation, token services, e-mail.</summary>
+    public static IServiceCollection AddDeskIdentity(
+        this IServiceCollection services, IConfiguration configuration, bool isProduction)
+    {
+        services.AddDeskPersistence(configuration);
 
         var jwt = new JwtOptions();
         configuration.GetSection("Jwt").Bind(jwt);
@@ -44,8 +59,7 @@ public static class InfrastructureExtensions
         services.AddScoped<RefreshTokenService>();
         services.AddScoped<ExternalLoginService>();
 
-        services.Configure<SmtpOptions>(configuration.GetSection("Smtp"));
-        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddDeskEmail(configuration);
         services.AddScoped<InvitationService>();
         return services;
     }
