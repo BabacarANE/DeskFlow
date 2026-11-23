@@ -9,6 +9,11 @@ namespace Desk.IntegrationTests.Support;
 /// </summary>
 public sealed class ContractSchema(JsonElement document)
 {
+    private bool _strict;
+
+    /// <summary>A checker that also refuses properties the contract does not declare (and requires the declared ones).</summary>
+    public ContractSchema AsStrict() => new(document) { _strict = true };
+
     public static ContractSchema Load()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -60,11 +65,45 @@ public sealed class ContractSchema(JsonElement document)
         return element;
     }
 
-    private void Check(JsonElement value, JsonElement schema, string at, List<string> errors)
+    private HashSet<string> DeclaredNames(JsonElement schema)
     {
         if (schema.TryGetProperty("$ref", out var reference))
         {
-            Check(value, Resolve(reference.GetString()!), at, errors);
+            return DeclaredNames(Resolve(reference.GetString()!));
+        }
+
+        var names = new HashSet<string>();
+        if (schema.TryGetProperty("allOf", out var allOf))
+        {
+            foreach (var part in allOf.EnumerateArray())
+            {
+                names.UnionWith(DeclaredNames(part));
+            }
+        }
+
+        if (schema.TryGetProperty("properties", out var properties))
+        {
+            names.UnionWith(properties.EnumerateObject().Select(p => p.Name));
+        }
+
+        return names;
+    }
+
+    private void Check(JsonElement value, JsonElement schema, string at, List<string> errors, bool checkNames = true)
+    {
+        if (_strict && checkNames && value.ValueKind == JsonValueKind.Object)
+        {
+            var declared = DeclaredNames(schema);
+            var actual = value.EnumerateObject().Select(p => p.Name).ToHashSet();
+            if (declared.Count > 0 && !declared.SetEquals(actual))
+            {
+                errors.Add($"{at}: properties differ from the contract (unexpected: {string.Join(",", actual.Except(declared))}; missing: {string.Join(",", declared.Except(actual))})");
+            }
+        }
+
+        if (schema.TryGetProperty("$ref", out var reference))
+        {
+            Check(value, Resolve(reference.GetString()!), at, errors, checkNames);
             return;
         }
 
@@ -78,7 +117,7 @@ public sealed class ContractSchema(JsonElement document)
                     return;
                 }
 
-                Check(value, part, at, errors);
+                Check(value, part, at, errors, checkNames: false);
             }
 
             return;
