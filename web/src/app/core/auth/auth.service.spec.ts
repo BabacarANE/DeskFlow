@@ -117,6 +117,14 @@ describe('AuthService', () => {
     expect(auth.accessToken).toBe('tok-3');
   });
 
+  it('does not bring the token back when a renewal started before clear() completes after it', () => {
+    auth.refreshToken().subscribe();
+    const pending = http.expectOne('/api/v1/auth/refresh');
+    auth.clear();
+    pending.flush({ accessToken: 'late-token', expiresIn: 900 });
+    expect(auth.accessToken).toBeNull();
+  });
+
   it('logs out: calls the API, drops the session and the theme, goes to /login', async () => {
     const restored = auth.restoreSession();
     await respond('/api/v1/auth/refresh', { accessToken: 'tok-1', expiresIn: 900 });

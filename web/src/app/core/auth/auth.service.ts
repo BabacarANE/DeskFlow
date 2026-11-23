@@ -31,6 +31,8 @@ export class AuthService {
   private readonly currentUser = signal<Me | null>(null);
   private session?: Promise<boolean>;
   private refreshing?: Observable<string>;
+  /** Bumped by clear(): a renewal started before it must not bring the token back. */
+  private sessionGeneration = 0;
 
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
@@ -67,9 +69,12 @@ export class AuthService {
 
   /** Single-flight token renewal, used by the interceptor after a 401. */
   refreshToken(): Observable<string> {
+    const generation = this.sessionGeneration;
     this.refreshing ??= this.api.refresh().pipe(
       map((r) => r.accessToken),
-      tap((token) => (this.token = token)),
+      tap((token) => {
+        if (generation === this.sessionGeneration) this.token = token;
+      }),
       finalize(() => (this.refreshing = undefined)),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
@@ -88,6 +93,8 @@ export class AuthService {
 
   /** Forgets the session locally (also used when a refresh fails). */
   clear(): void {
+    this.sessionGeneration++;
+    this.refreshing = undefined;
     this.token = null;
     this.currentUser.set(null);
     this.session = Promise.resolve(false);
