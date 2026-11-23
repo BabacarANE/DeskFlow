@@ -61,6 +61,14 @@ describe('NotificationsState', () => {
     expect(state.announcement()).toBe('Nouvelle notification : Ticket #12 vous a été assigné');
   });
 
+  it('changes the live region text even when two identical events arrive in a row', () => {
+    events.next(event('ticketAssigned'));
+    const first = state.announcement();
+    events.next(event('ticketAssigned'));
+    expect(state.announcement()).not.toBe(first);
+    expect(state.announcement().trim()).toBe(first.trim());
+  });
+
   it('keeps only the most recent notifications', () => {
     for (let i = 1; i <= MAX_NOTIFICATIONS + 5; i++) events.next(event('ticketCreated', i));
     expect(state.items()).toHaveLength(MAX_NOTIFICATIONS);

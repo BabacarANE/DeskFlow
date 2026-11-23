@@ -110,6 +110,7 @@ export class RealtimeService {
   private scheduleRetry(generation: number): void {
     this.status.set('offline');
     this.hub = undefined;
+    clearTimeout(this.timer); // never keep two pending retries
     const delay = backoffDelay(this.retries++);
     this.timer = setTimeout(async () => {
       // The previous token may have expired while offline: renew it (single flight) first.

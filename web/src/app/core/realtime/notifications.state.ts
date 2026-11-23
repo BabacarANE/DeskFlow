@@ -33,6 +33,7 @@ export class NotificationsState {
   private readonly auth = inject(AuthService);
   private readonly userId = computed(() => this.auth.user()?.id ?? null);
   private nextId = 1;
+  private spoken = false;
 
   readonly items = signal<AppNotification[]>([]);
   readonly unreadCount = computed(() => this.items().filter((n) => !n.read).length);
@@ -62,7 +63,9 @@ export class NotificationsState {
       read: false,
     };
     this.items.update((list) => [notification, ...list].slice(0, MAX_NOTIFICATIONS));
-    this.announcement.set(`Nouvelle notification : ${text}`);
+    // Two identical texts in a row would not change the live region: alternate an invisible suffix.
+    this.spoken = !this.spoken;
+    this.announcement.set(`Nouvelle notification : ${text}${this.spoken ? '' : ' '}`);
   }
 
   markRead(id: number): void {
