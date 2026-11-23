@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using DotNet.Testcontainers.Builders;
@@ -15,11 +18,77 @@ namespace Desk.IntegrationTests.Support;
 /// </summary>
 public sealed class RabbitMqFixture : IAsyncLifetime
 {
-    private readonly RabbitMqContainer _container = new RabbitMqBuilder("rabbitmq:4-management-alpine").WithUsername("guest").WithPassword("guest").WithPortBinding(15672, true).Build();
+    // Fixed host ports: a stopped and restarted container must come back where the Worker expects it.
+    private readonly int _amqpPort = FreePort();
+    private readonly int _managementPort = FreePort();
+    private readonly RabbitMqContainer _container;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _started;
 
+    public RabbitMqFixture() =>
+        _container = new RabbitMqBuilder("rabbitmq:4-management-alpine").WithUsername("guest").WithPassword("guest")
+            .WithPortBinding(_amqpPort, 5672).WithPortBinding(_managementPort, 15672).Build();
+
     public Task InitializeAsync() => Task.CompletedTask;
+
+    private static int FreePort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    private string ManagementUrl => $"http://{_container.Hostname}:{_managementPort}/api/";
+
+    private HttpClient Management()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(ManagementUrl) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes("guest:guest")));
+        return http;
+    }
+
+    /// <summary>Stops the broker (the container keeps its disk: durable queues and persistent messages survive).</summary>
+    public Task StopBrokerAsync() => Docker("stop", "-t", "5");
+
+    public async Task StartBrokerAsync()
+    {
+        await Docker("start");
+        await Poll.UntilAsync(async () =>
+        {
+            try
+            {
+                using var http = Management();
+                if (!(await http.GetAsync("overview")).IsSuccessStatusCode)
+                {
+                    return false;
+                }
+
+                var factory = new ConnectionFactory { Uri = new Uri($"amqp://guest:guest@{_container.Hostname}:{_amqpPort}/") };
+                await using var connection = await factory.CreateConnectionAsync();
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }, "broker back after restart", 90);
+    }
+
+    private async Task Docker(params string[] arguments)
+    {
+        var info = new ProcessStartInfo("docker") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var argument in arguments)
+        {
+            info.ArgumentList.Add(argument);
+        }
+
+        info.ArgumentList.Add(_container.Id);
+        using var process = Process.Start(info)!;
+        await process.WaitForExitAsync();
+        Assert.Equal(0, process.ExitCode);
+    }
 
     public async Task DisposeAsync()
     {
@@ -46,13 +115,11 @@ public sealed class RabbitMqFixture : IAsyncLifetime
         }
 
         var vhost = "t" + Guid.NewGuid().ToString("N");
-        using var http = new HttpClient { BaseAddress = new Uri($"http://{_container.Hostname}:{_container.GetMappedPublicPort(15672)}/api/") };
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes("guest:guest")));
+        using var http = Management();
         (await http.PutAsync($"vhosts/{vhost}", JsonContent.Create(new { }))).EnsureSuccessStatusCode();
         (await http.PutAsync($"permissions/{vhost}/guest", JsonContent.Create(new { configure = ".*", write = ".*", read = ".*" }))).EnsureSuccessStatusCode();
 
-        var uri = $"amqp://guest:guest@{_container.Hostname}:{_container.GetMappedPublicPort(5672)}/{vhost}";
-        return new TestBroker(uri);
+        return new TestBroker($"amqp://guest:guest@{_container.Hostname}:{_amqpPort}/{vhost}", ManagementUrl, vhost);
     }
 }
 
@@ -63,14 +130,62 @@ public sealed record QueuedMessage(string Body, IReadOnlyDictionary<string, stri
 }
 
 /// <summary>Test-side view of one virtual host.</summary>
-public sealed class TestBroker(string uri) : IAsyncDisposable
+public sealed class TestBroker(string uri, string managementUrl, string vhost) : IAsyncDisposable
 {
     private IConnection? _connection;
 
     public string Uri { get; } = uri;
 
-    private async Task<IConnection> ConnectionAsync() =>
-        _connection ??= await new ConnectionFactory { Uri = new Uri(Uri) }.CreateConnectionAsync();
+    private async Task<IConnection> ConnectionAsync()
+    {
+        if (_connection is { IsOpen: false })
+        {
+            _connection.Dispose();
+            _connection = null;
+        }
+
+        return _connection ??= await new ConnectionFactory { Uri = new Uri(Uri) }.CreateConnectionAsync();
+    }
+
+    /// <summary>Closes, from the broker side, the connections opened with this client-provided name (a server-side close).</summary>
+    public async Task<int> CloseConnectionsAsync(string clientName)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(managementUrl) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes("guest:guest")));
+        // The management statistics lag by a few seconds (default emission interval 5 s): wait for the connection to be listed.
+        var closed = 0;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (closed == 0 && DateTime.UtcNow < deadline)
+        {
+            var connections = await http.GetFromJsonAsync<JsonElement>($"vhosts/{vhost}/connections");
+            foreach (var connection in connections.EnumerateArray())
+            {
+                if (connection.GetProperty("client_properties").TryGetProperty("connection_name", out var name) && name.GetString() == clientName)
+                {
+                    (await http.DeleteAsync("connections/" + System.Uri.EscapeDataString(connection.GetProperty("name").GetString()!))).EnsureSuccessStatusCode();
+                    closed++;
+                }
+            }
+
+            if (closed == 0)
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        return closed;
+    }
+
+    /// <summary>Puts many messages in a queue at once (default exchange), without waiting for confirms.</summary>
+    public async Task FillQueueAsync(string queue, int count, Func<int, (byte[] Body, Dictionary<string, object?> Headers)> factory)
+    {
+        await using var channel = await ChannelAsync();
+        for (var i = 0; i < count; i++)
+        {
+            var (body, headers) = factory(i);
+            await channel.BasicPublishAsync(string.Empty, queue, false, new BasicProperties { Persistent = true, Headers = headers }, body);
+        }
+    }
 
     public async Task<IChannel> ChannelAsync() => await (await ConnectionAsync()).CreateChannelAsync();
 
@@ -185,7 +300,15 @@ public sealed class TestBroker(string uri) : IAsyncDisposable
     {
         if (_connection is not null)
         {
-            await _connection.CloseAsync();
+            try
+            {
+                await _connection.CloseAsync();
+            }
+            catch (Exception)
+            {
+                // The broker may be down or restarting: nothing to close.
+            }
+
             _connection.Dispose();
         }
     }

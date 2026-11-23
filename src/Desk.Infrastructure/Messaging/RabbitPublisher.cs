@@ -18,7 +18,23 @@ public sealed record OutgoingMessage(
 {
     public static OutgoingMessage ForEvent(MessageEnvelope envelope, int attempt = 0) =>
         new(MessagingNames.EventsExchange, envelope.Type, envelope.ToUtf8Json(),
-            envelope.MessageId.ToString(), envelope.CorrelationId, envelope.TenantId.ToString(), attempt);
+            envelope.MessageId.ToString(), envelope.CorrelationId, envelope.TenantId.ToString(), attempt, Mandatory: true);
+}
+
+/// <summary>A mandatory message that no queue received: the broker gave it back.</summary>
+public sealed class UnroutableMessageException(string exchange, string routingKey)
+    : Exception($"No queue is bound to {exchange}/{routingKey}: the message was returned by the broker.");
+
+public static class MessagePublisherExtensions
+{
+    /// <summary>Publishes a mandatory message; an unroutable one is a failure, never a success.</summary>
+    public static async Task PublishRoutedAsync(this IMessagePublisher publisher, OutgoingMessage message, CancellationToken ct)
+    {
+        if (!await publisher.PublishAsync(message with { Mandatory = true }, ct))
+        {
+            throw new UnroutableMessageException(message.Exchange, message.RoutingKey);
+        }
+    }
 }
 
 public interface IMessagePublisher
@@ -73,6 +89,14 @@ public sealed class RabbitPublisher(RabbitConnections connections, ILogger<Rabbi
             try
             {
                 await channel.BasicPublishAsync(message.Exchange, message.RoutingKey, message.Mandatory, properties, message.Body, timeout.Token);
+            }
+            catch (RabbitMQ.Client.Exceptions.PublishReturnException ex)
+            {
+                // With confirm tracking, a mandatory message that no queue received is reported as an exception
+                // (basic.return, 312 NO_ROUTE). The channel is fine: it is a routing answer, not a failure of the broker.
+                logger.LogWarning("Message {MessageId} returned by the broker ({ReplyText}) on {Exchange}/{RoutingKey}",
+                    message.MessageId, ex.ReplyText, message.Exchange, message.RoutingKey);
+                return false;
             }
             catch (Exception)
             {

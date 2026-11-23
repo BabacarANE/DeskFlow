@@ -70,9 +70,11 @@ public sealed class TestWorker : IAsyncDisposable
 
     public ProbeLog Probe => _host.Services.GetRequiredService<ProbeLog>();
 
+    public IServiceProvider Services => _host.Services;
+
     public static async Task<TestWorker> StartAsync(
         string postgres, TestBroker broker, Dictionary<string, string?>? settings = null,
-        bool consumers = true, bool dispatcher = true, bool probe = false, bool waitForConsumers = true)
+        bool consumers = true, bool dispatcher = true, bool probe = false, bool waitForConsumers = true, Action<IServiceCollection>? configure = null)
     {
         var builder = Host.CreateApplicationBuilder();
         var all = new Dictionary<string, string?>
@@ -119,6 +121,7 @@ public sealed class TestWorker : IAsyncDisposable
             RemoveHosted<OutboxDispatcherService>(builder.Services);
         }
 
+        configure?.Invoke(builder.Services);
         var host = builder.Build();
         await host.StartAsync();
         var worker = new TestWorker(host);
@@ -164,6 +167,8 @@ public abstract class MessagingTestBase(PostgresFixture postgres, RabbitMqFixtur
 {
     private readonly List<IAsyncDisposable> _disposables = [];
 
+    protected RabbitMqFixture Rabbit { get; } = rabbit;
+
     protected string ConnectionString { get; private set; } = "";
 
     protected TestBroker Broker { get; private set; } = null!;
@@ -171,7 +176,7 @@ public abstract class MessagingTestBase(PostgresFixture postgres, RabbitMqFixtur
     public virtual async Task InitializeAsync()
     {
         ConnectionString = await postgres.CreateDatabaseAsync();
-        Broker = await rabbit.NewBrokerAsync();
+        Broker = await Rabbit.NewBrokerAsync();
         _disposables.Add(Broker);
 
         var options = new DbContextOptionsBuilder<DeskDbContext>().UseNpgsql(ConnectionString).Options;
@@ -188,9 +193,10 @@ public abstract class MessagingTestBase(PostgresFixture postgres, RabbitMqFixtur
     }
 
     protected async Task<TestWorker> StartWorkerAsync(
-        Dictionary<string, string?>? settings = null, bool consumers = true, bool dispatcher = true, bool probe = false)
+        Dictionary<string, string?>? settings = null, bool consumers = true, bool dispatcher = true, bool probe = false,
+        Action<IServiceCollection>? configure = null)
     {
-        var worker = await TestWorker.StartAsync(ConnectionString, Broker, settings, consumers, dispatcher, probe);
+        var worker = await TestWorker.StartAsync(ConnectionString, Broker, settings, consumers, dispatcher, probe, configure: configure);
         _disposables.Add(worker);
         return worker;
     }

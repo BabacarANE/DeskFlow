@@ -54,6 +54,13 @@ public sealed class MessageProcessor(
                 MessagingNames.FailureKindPoison, ct);
         }
 
+        var headerMessageId = MessageHeaders.GetString(headers, MessagingNames.MessageId);
+        if (headerMessageId is not null && !(Guid.TryParse(headerMessageId, out var parsedId) && parsedId == envelope.MessageId))
+        {
+            return await DeadLetterAsync(consumer, delivery, attempt, origin, envelope, "message-id header differs from the envelope messageId.",
+                MessagingNames.FailureKindPoison, ct);
+        }
+
         using var _ = LogContext.PushProperty("CorrelationId", envelope.CorrelationId);
         using var __ = LogContext.PushProperty("MessageId", envelope.MessageId);
         using var ___ = LogContext.PushProperty("Consumer", consumer.Name);
@@ -113,7 +120,7 @@ public sealed class MessageProcessor(
 
             logger.LogWarning(ex, "Message {MessageId} failed in {Consumer} (attempt {Attempt}); retry in {Delay}",
                 envelope.MessageId, consumer.Name, attempt, decision.Delay);
-            await publisher.PublishAsync(new OutgoingMessage(
+            await publisher.PublishRoutedAsync(new OutgoingMessage(
                 MessagingNames.RetryExchange,
                 MessagingNames.DelayRoutingKeyFor(consumer.QueueSuffix, decision.Delay),
                 delivery.Body,
@@ -168,7 +175,7 @@ public sealed class MessageProcessor(
             logger.LogError("Poisoned message for {Consumer} ({Reason}); sent to the DLQ without retry", consumer.Name, reason);
         }
 
-        await publisher.PublishAsync(new OutgoingMessage(
+        await publisher.PublishRoutedAsync(new OutgoingMessage(
             MessagingNames.DlxExchange, MessagingNames.DlqRoutingKey, delivery.Body,
             messageId, correlationId, tenantId, attempt, extra), ct);
         return DeliveryOutcome.DeadLettered;

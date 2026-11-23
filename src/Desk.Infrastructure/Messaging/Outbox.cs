@@ -51,6 +51,8 @@ public sealed class OutboxDispatcher(
     TimeProvider clock,
     ILogger<OutboxDispatcher> logger)
 {
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _unroutableLogged = new();
+
     /// <summary>Dispatches one batch and returns the number of messages published.</summary>
     public async Task<int> DispatchBatchAsync(CancellationToken ct)
     {
@@ -62,7 +64,7 @@ public sealed class OutboxDispatcher(
         var rows = await db.OutboxMessages
             .FromSql($"""
                 SELECT * FROM "OutboxMessages"
-                WHERE "DispatchedAt" IS NULL
+                WHERE "DispatchedAt" IS NULL AND "FailedAt" IS NULL
                 ORDER BY "CreatedAt", "Id"
                 LIMIT {batch}
                 FOR UPDATE SKIP LOCKED
@@ -76,14 +78,33 @@ public sealed class OutboxDispatcher(
             {
                 if (!MessageEnvelope.TryParse(System.Text.Encoding.UTF8.GetBytes(row.Payload), out var envelope, out var reason))
                 {
-                    // Stays pending and visible: it is a bug of the writer, not something to drop silently.
-                    logger.LogError("Outbox message {OutboxId} has an invalid envelope ({Reason}); skipped", row.Id, reason);
+                    // Can never be published: mark it failed (kept, visible, never selected again) so that it does not
+                    // block the batches of everyone else, and log it once.
+                    row.FailedAt = clock.GetUtcNow();
+                    row.FailureReason = reason.Length > 500 ? reason[..500] : reason;
+                    logger.LogError("Outbox message {OutboxId} has an invalid envelope ({Reason}); marked failed", row.Id, reason);
                     continue;
                 }
 
                 using (LogContext.PushProperty("CorrelationId", envelope.CorrelationId))
                 {
-                    await publisher.PublishAsync(OutgoingMessage.ForEvent(envelope), ct);
+                    // Mandatory: an event no queue received is a failure, never "dispatched".
+                    try
+                    {
+                        await publisher.PublishRoutedAsync(OutgoingMessage.ForEvent(envelope), ct);
+                    }
+                    catch (UnroutableMessageException)
+                    {
+                        // The row stays pending (published as soon as a queue is bound); the others of the batch go on.
+                        if (_unroutableLogged.TryAdd(row.Id, 0))
+                        {
+                            logger.LogWarning("Outbox message {MessageId} ({Type}) is unroutable: no queue is bound to its routing key; it stays pending",
+                                envelope.MessageId, envelope.Type);
+                        }
+
+                        continue;
+                    }
+
                     row.DispatchedAt = clock.GetUtcNow();
                     published++;
                     logger.LogInformation("Outbox message {MessageId} ({Type}) published", envelope.MessageId, envelope.Type);

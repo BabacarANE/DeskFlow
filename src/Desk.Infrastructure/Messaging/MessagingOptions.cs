@@ -17,6 +17,9 @@ public sealed class MessagingOptions
 
     public int OutboxBatchSize { get; set; } = 50;
 
+    /// <summary>On shutdown, how long handlers already running may take before they are interrupted (and their message requeued).</summary>
+    public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(15);
+
     public RetryPolicy BuildRetryPolicy() =>
         new(RetryDelays is { Length: > 0 }
             ? RetryDelays.Select(d => TimeSpan.Parse(d, CultureInfo.InvariantCulture)).ToArray()

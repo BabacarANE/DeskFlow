@@ -10,8 +10,8 @@ namespace Desk.Infrastructure.Messaging;
 /// </summary>
 public sealed class RabbitConnections(IConfiguration configuration) : IAsyncDisposable
 {
-    private readonly Slot _publisher = new("deskflow-publisher");
-    private readonly Slot _consumer = new("deskflow-consumer");
+    private readonly Slot _publisher = new("deskflow-publisher", recovers: true);
+    private readonly Slot _consumer = new("deskflow-consumer", recovers: false);
 
     private Uri Uri => new(configuration.GetConnectionString("RabbitMq")
         ?? throw new InvalidOperationException("ConnectionStrings:RabbitMq is not configured."));
@@ -27,6 +27,25 @@ public sealed class RabbitConnections(IConfiguration configuration) : IAsyncDisp
             return open;
         }
 
+        if (slot.Connection is not null && !slot.Recovers)
+        {
+            // The consumer connection does not recover by itself: ConsumerHostedService re-subscribes on a fresh one,
+            // so that a recovered channel and a re-created one never consume the same queue twice.
+            await slot.Gate.WaitAsync(ct);
+            try
+            {
+                if (slot.Connection is { IsOpen: false } dead)
+                {
+                    slot.Connection = null;
+                    dead.Dispose();
+                }
+            }
+            finally
+            {
+                slot.Gate.Release();
+            }
+        }
+
         await slot.Gate.WaitAsync(ct);
         try
         {
@@ -37,7 +56,8 @@ public sealed class RabbitConnections(IConfiguration configuration) : IAsyncDisp
                 {
                     Uri = Uri,
                     ClientProvidedName = slot.Name,
-                    AutomaticRecoveryEnabled = true,
+                    AutomaticRecoveryEnabled = slot.Recovers,
+                    NetworkRecoveryInterval = TimeSpan.FromSeconds(2),
                     RequestedConnectionTimeout = TimeSpan.FromSeconds(5),
                 };
                 slot.Connection = await factory.CreateConnectionAsync(ct);
@@ -51,9 +71,11 @@ public sealed class RabbitConnections(IConfiguration configuration) : IAsyncDisp
         }
     }
 
-    private sealed class Slot(string name)
+    private sealed class Slot(string name, bool recovers)
     {
         public string Name { get; } = name;
+
+        public bool Recovers { get; } = recovers;
 
         public SemaphoreSlim Gate { get; } = new(1, 1);
 

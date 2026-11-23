@@ -71,8 +71,22 @@ public sealed class FakeEmailSender : IEmailSender
         return Task.CompletedTask;
     }
 
-    public Task SendAsync(string to, string subject, string textBody, string? htmlBody, CancellationToken ct = default)
+    /// <summary>When set, sending waits for it: lets a test hold a handler in flight.</summary>
+    public Task? Hold { get; set; }
+
+    private int _entered;
+
+    /// <summary>Number of sends that have started (held ones included).</summary>
+    public int Entered => Volatile.Read(ref _entered);
+
+    public async Task SendAsync(string to, string subject, string textBody, string? htmlBody, CancellationToken ct = default)
     {
+        Interlocked.Increment(ref _entered);
+        if (Hold is { } hold)
+        {
+            await hold.WaitAsync(ct);
+        }
+
         if (FailNext)
         {
             FailNext = false;
@@ -80,7 +94,6 @@ public sealed class FakeEmailSender : IEmailSender
         }
 
         Sent.Enqueue(new SentEmail(to, subject, textBody, htmlBody));
-        return Task.CompletedTask;
     }
 
     /// <summary>The clear invitation token only exists in the e-mail link.</summary>

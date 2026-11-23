@@ -31,7 +31,7 @@ public sealed class MessagingTopology(
     private static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)];
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private bool _declared;
+    private volatile bool _declared;
 
     /// <summary>
     /// Queues of the full contract (docs/api/events.md, section 3). Declared (with bindings and delay queues) even when the

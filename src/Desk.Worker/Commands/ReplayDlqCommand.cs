@@ -8,7 +8,7 @@ namespace Desk.Worker.Commands;
 
 /// <summary>
 /// <c>replay-dlq [--max N] [--dry-run]</c>. Exit codes: 0 done, 1 some messages could not be replayed (they stay in the
-/// DLQ), 2 bad arguments, 3 broker unreachable.
+/// DLQ), 2 bad arguments, 3 broker unreachable or lost during the replay (partial report printed).
 /// </summary>
 public static class ReplayDlqCommand
 {
@@ -35,6 +35,13 @@ public static class ReplayDlqCommand
             var report = await provider.GetRequiredService<DlqReplayer>().ReplayAsync(options, CancellationToken.None);
             await Print(report, options, output);
             return report.HasProblems ? 1 : 0;
+        }
+        catch (ReplayInterruptedException ex)
+        {
+            await Print(ex.Partial, options, output);
+            await error.WriteLineAsync("RabbitMQ interrompu pendant le rejeu : " + ex.InnerException?.Message);
+            await error.WriteLineAsync("Les messages non confirmés sont restés dans desk.dlq ; un message republié mais dont l'acquittement a été perdu peut être rejoué deux fois (sans effet double : idempotence). Relancez la commande.");
+            return 3;
         }
         catch (RabbitMQ.Client.Exceptions.BrokerUnreachableException ex)
         {

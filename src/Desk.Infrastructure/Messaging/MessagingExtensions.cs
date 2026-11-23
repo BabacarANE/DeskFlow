@@ -93,6 +93,8 @@ public static class MessagingExtensions
 
         services.AddSingleton<ConsumerReadiness>();
         services.AddSingleton<MessageProcessor>();
+        services.AddSingleton<ConsumersHealthCheck>();
         services.AddHostedService<ConsumerHostedService>();
+        services.AddHealthChecks().AddCheck<ConsumersHealthCheck>("consumers", tags: [HealthChecksExtensions.ReadyTag]);
     }
 }
