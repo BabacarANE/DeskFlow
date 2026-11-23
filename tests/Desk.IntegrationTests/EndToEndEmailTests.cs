@@ -118,7 +118,8 @@ public class ApiTopologyTests(PostgresFixture postgres, RabbitMqFixture rabbit) 
         var ready = await Http.GetAsync("/health/ready");
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
 
-        await Poll.UntilAsync(async () => await _broker.ExistsAsync(MessagingNames.DlqQueue), "topology declared by the API", 20);
+        // Declaration is sequential: wait for the LAST queue declared (not the first, the DLQ), or the asserts below race it.
+        await Poll.UntilAsync(async () => await _broker.ExistsAsync("desk.agent-realtime.retry.2m"), "topology declared by the API", 20);
         Assert.True(await _broker.ExistsAsync(MessagingNames.EventsExchange, exchange: true));
         Assert.True(await _broker.ExistsAsync(MessagingNames.RetryExchange, exchange: true));
         Assert.True(await _broker.ExistsAsync(MessagingNames.DlxExchange, exchange: true));

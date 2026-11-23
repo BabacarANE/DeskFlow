@@ -41,7 +41,7 @@ docker compose exec worker dotnet Desk.Worker.dll replay-dlq
 
 En local, hors Docker : `dotnet src/Desk.Worker/bin/Debug/net10.0/Desk.Worker.dll replay-dlq` avec `ConnectionStrings__RabbitMq` défini.
 
-La commande republie chaque message sur `desk.events` avec sa clé d'origine (même `message-id` et `correlation-id`, `attempt` remis à 0, `x-replay-count` incrémenté), ne le retire de la DLQ qu'après confirmation du broker et affiche un compte rendu. Codes de sortie : 0 succès, 1 rien rejoué ou échecs, 2 arguments invalides, 3 broker injoignable.
+La commande republie chaque message sur `desk.events` avec sa clé d'origine (même `message-id` et `correlation-id`, `attempt` remis à 0, `x-replay-count` incrémenté), ne le retire de la DLQ qu'après confirmation du broker et affiche un compte rendu. Codes de sortie : 0 succès (y compris DLQ vide), 1 au moins un message ignoré ou en échec (il reste dans la DLQ), 2 arguments invalides, 3 broker injoignable.
 
 Le message est livré à **tous** les consommateurs liés à la clé : l'idempotence (`ProcessedMessage`) fait ignorer le doublon à ceux qui l'ont déjà traité, donc l'effet n'a lieu qu'une fois.
 
