@@ -3,8 +3,10 @@ using System.Linq.Expressions;
 using Desk.Api.Contracts;
 using Desk.Api.Http;
 using Desk.Core.Domain;
+using Desk.Core.Events;
 using Desk.Core.Rules;
 using Desk.Core.Tenancy;
+using Desk.Infrastructure.Messaging;
 using Desk.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -21,7 +23,7 @@ public sealed record Actor(Guid Id, Role Role)
 /// Ticket use cases. Tenant isolation comes from the global query filter: a ticket of another tenant is simply
 /// not found (404). A Requester only ever sees his own tickets, whatever the endpoint.
 /// </summary>
-public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeProvider clock)
+public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeProvider clock, OutboxWriter outbox)
 {
     // Concurrent comments on one ticket queue up on its row version: allow enough rounds for a burst.
     private const int MaxAttempts = 10;
@@ -73,6 +75,9 @@ public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeP
         ticket.Number = await NextNumberAsync(tenantId, ct);
         db.Tickets.Add(ticket);
         db.TicketEvents.Add(NewEvent(ticket.Id, actor.Id, TicketEventType.Created, null, TicketStatus.New.ToString(), now));
+        // Same SaveChanges, same transaction as the ticket: the event exists if and only if the ticket does.
+        outbox.Add(EventTypes.TicketCreated, tenantId,
+            new TicketCreatedPayload(ticket.Id, ticket.Number, ticket.Title, ticket.Priority, ticket.RequesterId), now);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
@@ -181,6 +186,12 @@ public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeP
                 }
 
                 db.TicketEvents.Add(NewEvent(ticket.Id, actor.Id, TicketEventType.StatusChanged, from.ToString(), to.ToString(), now));
+                if (to == TicketStatus.Resolved)
+                {
+                    outbox.Add(EventTypes.TicketResolved, ticket.TenantId,
+                        new TicketResolvedPayload(ticket.Id, ticket.Number, now), now);
+                }
+
                 changed = true;
             }
         }
@@ -201,9 +212,15 @@ public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeP
         if (request.AssigneeId.IsSet && request.AssigneeId.Value != ticket.AssigneeId)
         {
             var oldName = ticket.Assignee?.DisplayName;
+            var previousAssigneeId = ticket.AssigneeId;
             ticket.AssigneeId = newAssignee?.Id;
             ticket.Assignee = newAssignee;
             db.TicketEvents.Add(NewEvent(ticket.Id, actor.Id, TicketEventType.AssigneeChanged, oldName, newAssignee?.DisplayName, now));
+            if (newAssignee is not null)
+            {
+                outbox.Add(EventTypes.TicketAssigned, ticket.TenantId,
+                    new TicketAssignedPayload(ticket.Id, ticket.Number, ticket.Title, newAssignee.Id, previousAssigneeId, actor.Id), now);
+            }
             changed = true;
         }
 
@@ -264,6 +281,12 @@ public sealed class TicketService(DeskDbContext db, ITenantContext tenant, TimeP
                 CreatedAt = now,
             };
             db.TicketComments.Add(comment);
+            if (!internalNote)
+            {
+                // Internal notes never leave the agents: no event, hence no e-mail and no notification.
+                outbox.Add(EventTypes.TicketCommented, ticket.TenantId,
+                    new TicketCommentedPayload(ticket.Id, ticket.Number, comment.Id, actor.Id), now);
+            }
 
             if (ticket.FirstResponseAt is null && TicketPolicy.CountsAsFirstResponse(actor.Role, actor.Id, ticket.RequesterId, internalNote))
             {
