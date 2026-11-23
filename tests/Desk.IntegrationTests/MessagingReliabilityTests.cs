@@ -287,4 +287,66 @@ public class MessagingReliabilityTests(PostgresFixture postgres, RabbitMqFixture
         await Poll.UntilAsync(() => worker.Email.Sent.Count == 1, "e-mail for a row written before the Worker started");
         Assert.Equal(1, await CountAsync<Desk.Core.Domain.OutboxMessage>(db => db.OutboxMessages.Where(o => o.DispatchedAt != null)));
     }
+
+    [Fact]
+    public async Task The_declared_topology_matches_the_contract_table_exactly()
+    {
+        await using var worker = await StartWorkerAsync();
+        var expected = new Dictionary<string, string[]>
+        {
+            ["desk.email-ack"] = ["ticket.created"],
+            ["desk.assignment-notifier"] = ["ticket.assigned"],
+            ["desk.comment-notifier"] = ["ticket.commented"],
+            ["desk.kb-draft"] = ["ticket.resolved"],
+            ["desk.escalation"] = ["ticket.sla.breached"],
+            ["desk.agent-realtime"] = ["ticket.created", "ticket.assigned", "ticket.commented"],
+        };
+
+        Assert.Equal(expected.Keys.Order(), MessagingTopology.ContractQueues.Select(q => q.Queue).Order());
+        foreach (var (queue, keys) in expected)
+        {
+            Assert.True(await Broker.ExistsAsync(queue), queue);
+            Assert.Equal(keys.Order(), MessagingTopology.ContractQueues.Single(q => q.Queue == queue).RoutingKeys.Order());
+            foreach (var label in new[] { "400ms", "800ms", "1200ms" })
+            {
+                Assert.True(await Broker.ExistsAsync($"{queue}.retry.{label}"), queue + " " + label);
+            }
+        }
+
+        // Real bindings: publish each routing key and see which queues receive it.
+        foreach (var key in expected.Values.SelectMany(k => k).Distinct())
+        {
+            await Broker.PublishAsync(MessagingNames.EventsExchange, key, "{}"u8.ToArray());
+        }
+
+        var counts = new Dictionary<string, uint>();
+        await Poll.UntilAsync(async () =>
+        {
+            counts = expected.Keys.Where(q => q != "desk.email-ack").ToDictionary(q => q, q => Broker.CountAsync(q).Result);
+            return counts["desk.agent-realtime"] == 3 && counts["desk.assignment-notifier"] == 1;
+        }, "messages routed to the contract queues");
+        Assert.Equal(1u, counts["desk.comment-notifier"]);
+        Assert.Equal(1u, counts["desk.kb-draft"]);
+        Assert.Equal(1u, counts["desk.escalation"]);
+    }
+
+    [Theory]
+    [InlineData("ticket.assigned", "desk.assignment-notifier")]
+    [InlineData("ticket.commented", "desk.comment-notifier")]
+    [InlineData("ticket.resolved", "desk.kb-draft")]
+    public async Task An_event_without_implemented_consumer_is_kept_in_its_queue_not_lost(string type, string queue)
+    {
+        var ticket = await SeedTicketAsync("kept-" + type.Replace('.', '-'));
+        await using var worker = await StartWorkerAsync();
+        var envelope = MessageEnvelope.Create(Guid.NewGuid(), type, ticket.TenantId, DateTimeOffset.UtcNow, "c", new { ticketId = ticket.TicketId });
+
+        await AddToOutboxAsync(envelope);
+
+        await Poll.UntilAsync(async () => await Broker.CountAsync(queue) == 1, $"message kept in {queue}");
+        await Task.Delay(1500); // nobody consumes it, nothing dead-letters it
+        Assert.Equal(1u, await Broker.CountAsync(queue));
+        Assert.Equal(0u, await Broker.ConsumersAsync(queue));
+        Assert.Equal(0u, await Broker.CountAsync(MessagingNames.DlqQueue));
+        Assert.Equal(1, await CountAsync<Desk.Core.Domain.OutboxMessage>(db => db.OutboxMessages.Where(o => o.DispatchedAt != null)));
+    }
 }

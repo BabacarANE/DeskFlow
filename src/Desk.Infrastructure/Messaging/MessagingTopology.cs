@@ -1,9 +1,15 @@
+using Desk.Core.Events;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
 namespace Desk.Infrastructure.Messaging;
+
+public sealed record TopologyQueue(string QueueSuffix, IReadOnlyList<string> RoutingKeys)
+{
+    public string Queue => MessagingNames.QueueFor(QueueSuffix);
+}
 
 /// <summary>
 /// Declares the whole topology; every declaration is idempotent, so the API and the Worker both run it at startup.
@@ -27,10 +33,26 @@ public sealed class MessagingTopology(
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _declared;
 
-    /// <summary>Every consumer of the product (whatever its host) plus those registered explicitly: the topology is complete from either process.</summary>
-    public IReadOnlyList<ConsumerDefinition> Consumers { get; } =
-        ConsumerDefinition.Scan(typeof(MessagingTopology).Assembly)
-            .Concat(hosted)
+    /// <summary>
+    /// Queues of the full contract (docs/api/events.md, section 3). Declared (with bindings and delay queues) even when the
+    /// consumer is not implemented yet: events accumulate there instead of being dropped by the exchange. Nothing consumes
+    /// a queue without a handler: only registered <see cref="ConsumerDefinition"/>s are subscribed.
+    /// </summary>
+    public static readonly IReadOnlyList<TopologyQueue> ContractQueues =
+    [
+        new("email-ack", [EventTypes.TicketCreated]),
+        new("assignment-notifier", [EventTypes.TicketAssigned]),
+        new("comment-notifier", [EventTypes.TicketCommented]),
+        new("kb-draft", [EventTypes.TicketResolved]),
+        new("escalation", [EventTypes.TicketSlaBreached]),
+        new("agent-realtime", [EventTypes.TicketCreated, EventTypes.TicketAssigned, EventTypes.TicketCommented]),
+    ];
+
+    /// <summary>The contract queues plus those of consumers declared by attribute or registered explicitly (tests).</summary>
+    public IReadOnlyList<TopologyQueue> Consumers { get; } =
+        ContractQueues
+            .Concat(ConsumerDefinition.Scan(typeof(MessagingTopology).Assembly).Concat(hosted)
+                .Select(c => new TopologyQueue(c.QueueSuffix, c.RoutingKeys)))
             .GroupBy(c => c.QueueSuffix)
             .Select(g => g.Last())
             .ToList();
