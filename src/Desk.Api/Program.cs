@@ -23,6 +23,7 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 builder.Services.AddValidatorsFromAssemblyContaining<CreateTenantRequestValidator>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddScoped<Desk.Api.Tickets.TicketService>();
 builder.Services.AddOpenApi();
 
 // CORS: closed by default (same-site deployment behind nginx); origins are listed in configuration.
@@ -72,6 +73,8 @@ app.MapMeEndpoints();
 app.MapTenantEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
+app.MapCategoryEndpoints();
+app.MapTicketEndpoints();
 
 app.Run();
 
