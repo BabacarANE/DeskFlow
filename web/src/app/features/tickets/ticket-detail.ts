@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -24,6 +25,7 @@ import {
 } from '../../core/api/models';
 import { allowedTransitions, isAgentRole, isSlaBreachedDetail } from '../../core/api/ticket-rules';
 import { AuthService } from '../../core/auth/auth.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
 import { FieldError, applyFieldErrors } from '../../shared/field-error';
 import { StatusMessage } from '../../shared/status-message';
 import { PriorityBadge, SlaBadge, StatusBadge } from './ticket-badges';
@@ -400,6 +402,19 @@ export class TicketDetail implements OnInit {
     return t ? isSlaBreachedDetail(t) : false;
   });
 
+  /** A remote change arrived while an action was in flight: refresh once it is over. */
+  private remoteChangePending = false;
+
+  constructor() {
+    inject(RealtimeService)
+      .events.pipe(takeUntilDestroyed())
+      .subscribe((event) => {
+        if (event.ticketId !== this.id || this.status() !== 'ready') return;
+        if (this.busy()) this.remoteChangePending = true;
+        else void this.refreshQuietly();
+      });
+  }
+
   ngOnInit(): void {
     void this.load();
     void this.loadOptions();
@@ -520,6 +535,7 @@ export class TicketDetail implements OnInit {
       if (err instanceof ApiError && err.status === 409) await this.refresh();
     } finally {
       this.busy.set(false);
+      this.flushRemoteChange();
     }
   }
 
@@ -561,6 +577,20 @@ export class TicketDetail implements OnInit {
       return false;
     } finally {
       this.busy.set(false);
+      this.flushRemoteChange();
+    }
+  }
+
+  /**
+   * Refreshes ticket (so rowVersion stays current) and history after a remote event. Unlike
+   * refresh(), it shows no error and never touches the reply form, notice or pending conflict.
+   */
+  private async refreshQuietly(): Promise<void> {
+    try {
+      this.ticket.set(await firstValueFrom(this.api.getTicket(this.id)));
+      await this.loadEvents();
+    } catch {
+      // The ticket on screen stays valid; a 409 on the next change reloads it anyway.
     }
   }
 
@@ -572,6 +602,12 @@ export class TicketDetail implements OnInit {
       this.actionError.set(errorMessage(err));
     }
     await this.loadEvents();
+  }
+
+  private flushRemoteChange(): void {
+    if (!this.remoteChangePending) return;
+    this.remoteChangePending = false;
+    void this.refreshQuietly();
   }
 
   private async loadOptions(): Promise<void> {

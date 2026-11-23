@@ -60,6 +60,10 @@
                 {
                   "replace": "src/app/core/mock/mock-interceptors.ts",
                   "with": "src/app/core/mock/mock-interceptors.mock.ts"
+                },
+                {
+                  "replace": "src/app/core/realtime/hub-factory.ts",
+                  "with": "src/app/core/realtime/hub-factory.mock.ts"
                 }
               ]
             }

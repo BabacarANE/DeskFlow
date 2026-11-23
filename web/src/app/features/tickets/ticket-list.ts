@@ -1,7 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { debounceTime, firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import {
   PRIORITIES,
@@ -13,10 +14,13 @@ import {
 import { Category, TicketSort, UserRef } from '../../core/api/models';
 import { isSlaBreached } from '../../core/api/ticket-rules';
 import { AuthService } from '../../core/auth/auth.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Pager } from '../../shared/pager';
 import { StatusMessage } from '../../shared/status-message';
 import { PriorityBadge, SlaBadge, StatusBadge } from './ticket-badges';
 import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-state';
+
+const REFRESH_DEBOUNCE_MS = 400;
 
 @Component({
   selector: 'app-ticket-list',
@@ -264,6 +268,13 @@ export class TicketList implements OnInit {
   protected readonly categories = signal<Category[]>([]);
   protected readonly assignees = signal<UserRef[]>([]);
   protected readonly isAgent = this.state.canFilterAssignee;
+
+  constructor() {
+    // Any ticket event may change the list (new ticket, assignment, reply): refresh discreetly.
+    inject(RealtimeService)
+      .events.pipe(debounceTime(REFRESH_DEBOUNCE_MS), takeUntilDestroyed())
+      .subscribe(() => void this.state.reloadQuietly());
+  }
 
   ngOnInit(): void {
     void this.state.load();

@@ -230,6 +230,11 @@ function commentId(state: TicketState): string {
 let state = seed();
 
 /** Test helper: restores the initial ticket data set. */
+/** Tickets the fake hub can talk about, so that notifications open real mock tickets. */
+export function mockTicketRefs(): { id: string; number: number; title: string }[] {
+  return state.tickets.map((t) => ({ id: t.id, number: t.number, title: t.title }));
+}
+
 export function resetMockTickets(): void {
   state = seed();
 }
