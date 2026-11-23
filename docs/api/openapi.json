@@ -12,7 +12,7 @@
       "get": {
         "tags": ["auth"], "operationId": "startExternalLogin", "security": [],
         "summary": "Démarre la connexion OAuth (redirection 302 vers le fournisseur)",
-        "description": "Au retour du fournisseur, l'API pose le cookie refresh (HttpOnly, Secure, SameSite=Lax) et redirige vers /auth/callback du front. En cas d'échec, redirection vers /auth/callback?error=<code> avec code parmi : invitation_required, invitation_invalid, email_mismatch, email_not_verified, account_disabled, tenant_suspended.",
+        "description": "Au retour du fournisseur, l'API pose le cookie refresh (HttpOnly, Secure, SameSite=Lax) et redirige vers /auth/callback du front. En cas d'échec, redirection vers /auth/callback?error=<code> avec code parmi : invitation_required, invitation_invalid, email_mismatch, email_not_verified, account_disabled, tenant_suspended, provider_error (refus ou échec côté fournisseur).",
         "parameters": [
           { "name": "provider", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Provider" } },
           { "name": "invitation", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Jeton d'invitation en clair" }
