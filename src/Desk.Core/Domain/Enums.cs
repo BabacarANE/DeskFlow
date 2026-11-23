@@ -22,3 +22,21 @@ public enum InvitationStatus
     Accepted,
     Expired,
 }
+
+public enum TicketStatus
+{
+    New,
+    Open,
+    Pending,
+    Resolved,
+    Closed,
+}
+
+public enum TicketEventType
+{
+    Created,
+    StatusChanged,
+    PriorityChanged,
+    AssigneeChanged,
+    CategoryChanged,
+}
