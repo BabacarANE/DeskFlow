@@ -199,6 +199,8 @@ public sealed record Session(string Email, string AccessToken, string RefreshCoo
 
     public Task<HttpResponseMessage> PostAsync(string url, object body) => Http.SendAsync(Request(HttpMethod.Post, url, body));
 
+    public Task<HttpResponseMessage> PutAsync(string url, object body) => Http.SendAsync(Request(HttpMethod.Put, url, body));
+
     public Task<HttpResponseMessage> PatchAsync(string url, object body) => Http.SendAsync(Request(HttpMethod.Patch, url, body));
 
     public Task<HttpResponseMessage> DeleteAsync(string url) => Http.SendAsync(Request(HttpMethod.Delete, url));

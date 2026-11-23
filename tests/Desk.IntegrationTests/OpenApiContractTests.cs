@@ -72,6 +72,29 @@ public class OpenApiContractTests(PostgresFixture postgres) : ApiTestBase(postgr
         }
     }
 
+    [Fact]
+    public async Task FrozenContract_CoversThePhaseTwoOperations_AndTheApiExposesThem()
+    {
+        // Guards the two generic tests above against passing on a truncated contract.
+        using var contract = JsonDocument.Parse(await File.ReadAllTextAsync(FindContractFile()));
+        string[] phaseTwo =
+        [
+            "GET /api/v1/categories", "POST /api/v1/categories", "PUT /api/v1/categories/{id}", "DELETE /api/v1/categories/{id}",
+            "GET /api/v1/assignees", "GET /api/v1/tickets", "POST /api/v1/tickets", "GET /api/v1/tickets/{id}", "PATCH /api/v1/tickets/{id}",
+            "POST /api/v1/tickets/{id}/comments", "GET /api/v1/tickets/{id}/events",
+        ];
+        var operations = Operations(contract.RootElement, "/api/v1");
+        var response = await Http.GetAsync("/openapi/v1.json");
+        using var exposed = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var exposedOperations = Operations(exposed.RootElement, "");
+
+        foreach (var operation in phaseTwo)
+        {
+            Assert.Contains(operation, operations);
+            Assert.Contains(operation, exposedOperations);
+        }
+    }
+
     private static string Normalize(string pattern) =>
         System.Text.RegularExpressions.Regex.Replace(pattern, @"\{(\w+):\w+\}", "{$1}").TrimEnd('/');
 }

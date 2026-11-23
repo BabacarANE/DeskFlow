@@ -7,3 +7,8 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [001](001-rabbitmq-erlang-cookie-eacces.md) | RabbitMQ s'arrête au démarrage (`.erlang.cookie: eacces`) | Docker |
 | [002](002-tailwind-theme-vars-inlined.md) | Les teintes dérivées du thème ne suivent pas le thème d'entreprise (Tailwind v4) | Web |
 | [003](003-migrate-on-startup-breaks-health-tests.md) | Les tests de santé échouent après l'ajout des migrations au démarrage | API |
+| [005](005-ef-priority-sort-not-translatable.md) | Le tri des tickets par priorité répond 500 (expression LINQ non traduisible) | API |
+| [006](006-postgres-microsecond-precision.md) | Un horodatage renvoyé diffère de celui relu en base (précision) | API |
+| [007](007-ef-insert-order-same-table.md) | L'ordre des événements créés dans une même opération n'est pas celui de l'ajout | API |
+| [008](008-json-converter-skip-partial.md) | Un identifiant mal formé dans un PATCH répond 500 (`Utf8JsonReader.Skip`) | API |
+| [009](009-pagination-int-overflow.md) | `GET /tickets?page=2147483647` répond 500 (débordement d'offset) | API |

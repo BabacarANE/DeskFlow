@@ -13,13 +13,36 @@ public static class Policies
 {
     public const string SuperAdmin = "SuperAdmin";
     public const string TenantAdmin = "TenantAdmin";
+
+    /// <summary>Agent or TenantAdmin of a tenant.</summary>
+    public const string Agent = "Agent";
+
+    /// <summary>Any user of a tenant (Requester, Agent, TenantAdmin): never the SuperAdmin.</summary>
+    public const string TenantMember = "TenantMember";
+}
+
+/// <summary>RFC 7807 <c>type</c> URIs of the business conflicts (the contract documents the trailing slug).</summary>
+public static class ProblemTypes
+{
+    public const string Base = "https://deskflow.dev/problems/";
+    public const string InvalidTransition = Base + "invalid-transition";
+    public const string ConcurrencyConflict = Base + "concurrency-conflict";
+    public const string TicketClosed = Base + "ticket-closed";
+    public const string CategoryInUse = Base + "category-in-use";
+    public const string DuplicateName = Base + "duplicate-name";
 }
 
 public static class Problems
 {
     public static IResult NotFound(string? detail = null) => Results.Problem(statusCode: 404, title: "Ressource introuvable", detail: detail);
 
-    public static IResult Conflict(string detail) => Results.Problem(statusCode: 409, title: "Conflit", detail: detail);
+    public static IResult Conflict(string detail, string? type = null) =>
+        Results.Problem(statusCode: 409, title: "Conflit", detail: detail, type: type);
+
+    public static IResult Forbidden(string detail) => Results.Problem(statusCode: 403, title: "Accès refusé", detail: detail);
+
+    public static IResult Invalid(string field, string message) =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [message] }, statusCode: 422, title: "Données invalides");
 
     public static IResult Unauthorized(string detail) => Results.Problem(statusCode: 401, title: "Non authentifié", detail: detail);
 }
@@ -48,7 +71,11 @@ public static class PagingExtensions
         this IQueryable<TIn> ordered, int page, int pageSize, Func<TIn, TOut> map, CancellationToken ct)
     {
         var total = await ordered.CountAsync(ct);
-        var items = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        // long offset: page=int.MaxValue must not overflow. Past the last item the page is simply empty.
+        var offset = (long)(page - 1) * pageSize;
+        var items = offset >= total || offset > int.MaxValue
+            ? new List<TIn>()
+            : await ordered.Skip((int)offset).Take(pageSize).ToListAsync(ct);
         return new PagedResult<TOut>(items.Select(map).ToList(), total, page, pageSize);
     }
 }

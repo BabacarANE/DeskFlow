@@ -62,7 +62,11 @@ public static class AuthenticationSetup
 
         services.AddAuthorizationBuilder()
             .AddPolicy(Policies.SuperAdmin, p => p.RequireAuthenticatedUser().RequireRole(nameof(Role.SuperAdmin)))
-            .AddPolicy(Policies.TenantAdmin, p => p.RequireAuthenticatedUser().RequireRole(nameof(Role.TenantAdmin)).RequireClaim("tid"));
+            .AddPolicy(Policies.TenantAdmin, p => p.RequireAuthenticatedUser().RequireRole(nameof(Role.TenantAdmin)).RequireClaim("tid"))
+            .AddPolicy(Policies.Agent, p => p.RequireAuthenticatedUser()
+                .RequireRole(nameof(Role.TenantAdmin), nameof(Role.Agent)).RequireClaim("tid"))
+            .AddPolicy(Policies.TenantMember, p => p.RequireAuthenticatedUser()
+                .RequireRole(nameof(Role.TenantAdmin), nameof(Role.Agent), nameof(Role.Requester)).RequireClaim("tid"));
         return services;
     }
 
