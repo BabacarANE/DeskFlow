@@ -102,11 +102,22 @@ public sealed class OutboxDispatcher(
 }
 
 /// <summary>Polls the outbox (every second by default) and publishes what is pending.</summary>
-public sealed class OutboxDispatcherService(OutboxDispatcher dispatcher, IOptions<MessagingOptions> options, ILogger<OutboxDispatcherService> logger)
+public sealed class OutboxDispatcherService(
+    OutboxDispatcher dispatcher, MessagingTopology topology, IOptions<MessagingOptions> options, ILogger<OutboxDispatcherService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        try
+        {
+            // Publishing to an exchange that does not exist yet would close the channel.
+            await topology.EnsureDeclaredAsync(stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         var failures = 0;
         while (!stoppingToken.IsCancellationRequested)
         {

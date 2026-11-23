@@ -40,7 +40,11 @@ public sealed class DlqReplayer(RabbitConnections connections, ILogger<DlqReplay
         var failed = 0;
         ulong lastKept = 0;
 
-        while (options.Max is null || read < options.Max)
+        // Only what is in the queue now: a message that fails again while we run comes back to the tail and is not taken twice.
+        var declared = await channel.QueueDeclareAsync(MessagingNames.DlqQueue, durable: true, exclusive: false, autoDelete: false, cancellationToken: ct);
+        var limit = (int)Math.Min(declared.MessageCount, (uint)(options.Max ?? int.MaxValue));
+
+        while (read < limit)
         {
             var result = await channel.BasicGetAsync(MessagingNames.DlqQueue, autoAck: false, ct);
             if (result is null)

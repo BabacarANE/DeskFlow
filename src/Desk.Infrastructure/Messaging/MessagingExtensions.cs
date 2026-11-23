@@ -70,6 +70,7 @@ public static class MessagingExtensions
         services.AddDeskPersistence(configuration);
         services.AddDeskEmail(configuration);
         services.AddDeskMessaging(configuration);
+        services.AddDeskTopologyStartup();
         services.AddDeskConsumers(ConsumerHost.Worker);
         services.AddDeskOutboxDispatcher();
         return services;
