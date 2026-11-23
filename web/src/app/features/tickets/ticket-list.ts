@@ -186,7 +186,12 @@ import { TICKET_PAGE_SIZE, TicketFilters, TicketListState } from './ticket-list-
             <p class="text-sm text-ink-muted" role="status">
               {{ state.total() }} ticket{{ state.total() > 1 ? 's' : '' }}
             </p>
-            <div class="card table-wrap !p-0">
+            <div
+              class="card table-wrap !p-0"
+              tabindex="0"
+              role="region"
+              aria-label="Tableau des tickets, défilement horizontal possible"
+            >
               <table class="table">
                 <caption class="sr-only">
                   Liste des tickets
