@@ -48,9 +48,9 @@ public sealed class PostgresFixture : IAsyncLifetime
 }
 
 [CollectionDefinition("postgres")]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>;
+public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>, ICollectionFixture<RabbitMqFixture>, ICollectionFixture<MailpitFixture>;
 
-public sealed record SentEmail(string To, string Subject, string Body);
+public sealed record SentEmail(string To, string Subject, string Body, string? Html = null);
 
 public sealed class FakeEmailSender : IEmailSender
 {
@@ -68,6 +68,18 @@ public sealed class FakeEmailSender : IEmailSender
         }
 
         Sent.Enqueue(new SentEmail(to, subject, textBody));
+        return Task.CompletedTask;
+    }
+
+    public Task SendAsync(string to, string subject, string textBody, string? htmlBody, CancellationToken ct = default)
+    {
+        if (FailNext)
+        {
+            FailNext = false;
+            throw new InvalidOperationException("SMTP down");
+        }
+
+        Sent.Enqueue(new SentEmail(to, subject, textBody, htmlBody));
         return Task.CompletedTask;
     }
 
