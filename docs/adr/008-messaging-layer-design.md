@@ -19,3 +19,7 @@ Le SPEC section 8 exige outbox, idempotence, retries, dead-letter queue et rejeu
 - Ajouter un consommateur = une classe `[Consumer("suffixe", Hôte, "routing.key")]` ; la topologie suit le contrat.
 - Les retries d'un message prennent 2 min 35 s avec les délais par défaut.
 - Un message rejoué vers un consommateur qui a déjà réussi est ignoré, pas retraité.
+
+## Compléments (audit de la tranche A)
+- **Fiabilité à la panne** : événements publiés en `mandatory` (non routable = échec, la ligne reste en attente) ; consommateurs supervisés avec réabonnement (1, 2, 5 s) ; arrêt propre borné par `Messaging:ShutdownTimeout` ; échec de publication retry/DLQ = nack avec remise en file ; ligne d'outbox invalide marquée en échec (`FailedAt`, `FailureReason`). Limite connue : 50 lignes non routables ou plus en tête de l'outbox bloqueraient encore un lot.
+- **Couplage compose** : le service `worker` attend `api` en bonne santé, car l'API applique les migrations ; sans schéma, un consommateur échouerait en reprises puis en DLQ.

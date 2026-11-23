@@ -41,7 +41,7 @@ docker compose exec worker dotnet Desk.Worker.dll replay-dlq
 
 En local, hors Docker : `dotnet src/Desk.Worker/bin/Debug/net10.0/Desk.Worker.dll replay-dlq` avec `ConnectionStrings__RabbitMq` défini.
 
-La commande republie chaque message sur `desk.events` avec sa clé d'origine (même `message-id` et `correlation-id`, `attempt` remis à 0, `x-replay-count` incrémenté), ne le retire de la DLQ qu'après confirmation du broker et affiche un compte rendu. Codes de sortie : 0 succès (y compris DLQ vide), 1 au moins un message ignoré ou en échec (il reste dans la DLQ), 2 arguments invalides, 3 broker injoignable.
+La commande republie chaque message sur `desk.events` avec sa clé d'origine (même `message-id` et `correlation-id`, `attempt` remis à 0, `x-replay-count` incrémenté), ne le retire de la DLQ qu'après confirmation du broker et affiche un compte rendu. Codes de sortie : 0 succès (y compris DLQ vide), 1 au moins un message ignoré ou en échec (il reste dans la DLQ), 2 arguments invalides, 3 broker injoignable ou perdu en cours de rejeu (compte rendu partiel affiché, rien n'est perdu).
 
 Le message est livré à **tous** les consommateurs liés à la clé : l'idempotence (`ProcessedMessage`) fait ignorer le doublon à ceux qui l'ont déjà traité, donc l'effet n'a lieu qu'une fois.
 
@@ -57,3 +57,10 @@ docker compose up -d worker
 docker compose exec worker dotnet Desk.Worker.dll replay-dlq
 # 4. L'e-mail d'accusé apparaît dans Mailpit (http://localhost:8025)
 ```
+
+## 6. Pannes du broker
+
+- Un événement qu'aucune file ne reçoit reste en attente dans l'outbox (jamais marqué envoyé) ; un avertissement « is unroutable » est journalisé.
+- Après une coupure ou un redémarrage de RabbitMQ, le Worker se reconnecte et se réabonne seul ; `/health/ready` du Worker contient un contrôle « consumers ».
+- À l'arrêt, le Worker attend ses traitements en cours (`Messaging:ShutdownTimeout`, 15 s par défaut) puis remet les autres messages en file.
+- Une ligne d'outbox à enveloppe invalide est marquée en échec (`OutboxMessages.FailedAt`, `FailureReason`) et ignorée ensuite.
