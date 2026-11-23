@@ -482,7 +482,7 @@ export class TicketDetail implements OnInit {
 
   protected async reapply(): Promise<void> {
     const pending = this.conflict();
-    if (!pending) return;
+    if (!pending || this.busy()) return;
     this.conflict.set(null);
     await this.apply(pending.change, pending.summary);
   }
