@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Me, Role } from '../api/models';
 import { AuthService } from '../auth/auth.service';
@@ -12,11 +13,13 @@ class FakeHub implements HubLike {
   closeHandler?: () => void;
   started = 0;
   stopped = 0;
-  failStart = false;
+  failStart: unknown = false;
   constructor(readonly accessToken: () => string) {}
   start(): Promise<void> {
     this.started++;
-    return this.failStart ? Promise.reject(new Error('down')) : Promise.resolve();
+    return this.failStart
+      ? Promise.reject(this.failStart === true ? new Error('down') : this.failStart)
+      : Promise.resolve();
   }
   stop(): Promise<void> {
     this.stopped++;
@@ -34,9 +37,14 @@ describe('RealtimeService', () => {
   const user = signal<Me | null>(null);
   let token: string | null;
   let hubs: FakeHub[];
-  let failNext: boolean;
+  let failNext: unknown;
   const refreshToken = vi.fn();
+  const clear = vi.fn();
   let service: RealtimeService;
+
+  /** A JWT-shaped token expiring in `seconds` from now. */
+  const jwt = (seconds: number) =>
+    `h.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + seconds }))}.s`;
 
   const me = (role: Role): Me => ({ id: `u-${role}`, role }) as Me;
 
@@ -51,17 +59,20 @@ describe('RealtimeService', () => {
     token = 'token-1';
     user.set(null);
     refreshToken.mockReset();
+    clear.mockReset();
     refreshToken.mockImplementation(() => {
       token = 'token-2';
       return of('token-2');
     });
     TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         {
           provide: AuthService,
           useValue: {
             user,
             refreshToken,
+            clear,
             get accessToken() {
               return token;
             },
@@ -123,7 +134,7 @@ describe('RealtimeService', () => {
     const received: RealtimeEvent[] = [];
     service.events.subscribe((e) => received.push(e));
     const at = '2026-11-23T10:00:00Z';
-    const base = { ticketId: 't1', number: 12, title: 'VPN', at };
+    const base = { ticketId: '40000000-0000-4000-8000-000000000001', number: 12, title: 'VPN', at };
     hubs[0].handlers.get('ticketCreated')?.({ ...base, priority: 'High' });
     hubs[0].handlers.get('ticketAssigned')?.(base);
     hubs[0].handlers.get('ticketReplied')?.(base);
@@ -136,17 +147,42 @@ describe('RealtimeService', () => {
     ]);
   });
 
-  it('goes offline quietly, then reconnects with a renewed token after a backoff', async () => {
+  it('goes offline quietly, then reconnects after a backoff without renewing a valid token', async () => {
     setup();
+    token = jwt(900);
     failNext = true;
     user.set(me('Agent'));
     await flush();
     expect(service.status()).toBe('offline');
     failNext = false;
     await vi.advanceTimersByTimeAsync(backoffDelay(0, 1));
-    expect(refreshToken).toHaveBeenCalledTimes(1);
+    expect(refreshToken).not.toHaveBeenCalled();
     expect(hubs).toHaveLength(2);
+    expect(service.status()).toBe('connected');
+  });
+
+  it('renews a token close to its expiry exactly once before reconnecting', async () => {
+    setup();
+    token = jwt(30);
+    failNext = true;
+    user.set(me('Agent'));
+    await flush();
+    failNext = false;
+    await vi.advanceTimersByTimeAsync(backoffDelay(0, 1));
+    expect(refreshToken).toHaveBeenCalledTimes(1);
     expect(hubs[1].accessToken()).toBe('token-2');
+    expect(service.status()).toBe('connected');
+  });
+
+  it('renews the token after the hub answered 401', async () => {
+    setup();
+    token = jwt(900);
+    failNext = { statusCode: 401 };
+    user.set(me('Agent'));
+    await flush();
+    failNext = false;
+    await vi.advanceTimersByTimeAsync(backoffDelay(0, 1));
+    expect(refreshToken).toHaveBeenCalledTimes(1);
     expect(service.status()).toBe('connected');
   });
 
@@ -166,18 +202,43 @@ describe('RealtimeService', () => {
     expect(hubs).toHaveLength(3);
   });
 
-  it('keeps retrying when the token cannot be renewed, and stops after sign-out', async () => {
+  it('keeps retrying when the renewal fails because the server is unreachable', async () => {
     setup();
-    refreshToken.mockImplementation(() => throwError(() => new Error('401')));
+    token = jwt(10);
+    refreshToken.mockImplementation(() => throwError(() => ({ status: 0 })));
     failNext = true;
     user.set(me('Agent'));
     await flush();
     await vi.advanceTimersByTimeAsync(backoffDelay(0, 1));
     expect(hubs).toHaveLength(2);
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('stops the loop, clears the session and goes to sign-in when the renewal answers 401', async () => {
+    setup();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    token = jwt(10);
+    refreshToken.mockImplementation(() => throwError(() => ({ status: 401 })));
+    failNext = true;
+    user.set(me('Agent'));
+    await flush();
+    await vi.advanceTimersByTimeAsync(backoffDelay(0, 1));
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(['/login']);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(hubs).toHaveLength(1);
+    expect(refreshToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops retrying after sign-out', async () => {
+    setup();
+    failNext = true;
+    user.set(me('Agent'));
+    await flush();
     user.set(null);
     await flush();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(hubs).toHaveLength(2);
+    expect(hubs).toHaveLength(1);
   });
 
   it('caps the backoff at 30 seconds (plus jitter)', () => {

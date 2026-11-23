@@ -1,3 +1,4 @@
+import { Router } from '@angular/router';
 import { Injectable, Injector, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Subject, firstValueFrom } from 'rxjs';
 import { isAgentRole } from '../api/ticket-rules';
@@ -9,6 +10,25 @@ export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'offline';
 
 const MAX_DELAY_MS = 30_000;
 const BASE_DELAY_MS = 1_000;
+
+const RENEW_MARGIN_S = 60;
+
+function isUnauthorized(error: unknown): boolean {
+  const e = error as { status?: unknown; statusCode?: unknown } | null;
+  return e?.status === 401 || e?.statusCode === 401;
+}
+
+/** True when the JWT in memory is expired or expires within a minute. Opaque tokens: false. */
+export function tokenNeedsRenewal(token: string | null, nowMs: number = Date.now()): boolean {
+  if (!token) return false;
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp === 'number' && exp * 1000 - nowMs < RENEW_MARGIN_S * 1000;
+  } catch {
+    return false;
+  }
+}
 
 /** Exponential backoff (1 s, 2 s, 4 s ... 30 s) with up to 20 % jitter. */
 export function backoffDelay(retry: number, random: number = Math.random()): number {
@@ -25,6 +45,7 @@ export function backoffDelay(retry: number, random: number = Math.random()): num
 export class RealtimeService {
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
+  private readonly router = inject(Router);
   private readonly hubFactory = inject(HUB_FACTORY);
   private readonly subject = new Subject<RealtimeEvent>();
 
@@ -33,6 +54,8 @@ export class RealtimeService {
   private retries = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private started = false;
+  /** The hub refused the token (401): renew it before the next attempt. */
+  private rejectedToken = false;
 
   readonly events = this.subject.asObservable();
   readonly status = signal<RealtimeStatus>('idle');
@@ -94,8 +117,9 @@ export class RealtimeService {
     });
     try {
       await hub.start();
-    } catch {
+    } catch (error) {
       // Offline is a quiet state: the REST API stays the source of truth.
+      if (isUnauthorized(error)) this.rejectedToken = true;
       if (generation === this.generation) this.scheduleRetry(generation);
       return;
     }
@@ -113,11 +137,23 @@ export class RealtimeService {
     clearTimeout(this.timer); // never keep two pending retries
     const delay = backoffDelay(this.retries++);
     this.timer = setTimeout(async () => {
-      // The previous token may have expired while offline: renew it (single flight) first.
-      try {
-        await firstValueFrom(this.auth.refreshToken());
-      } catch {
-        // Still unreachable or session over: the interceptor and the auth state handle it.
+      // Renew only when needed: every renewal rotates the refresh cookie, and reusing an old
+      // one revokes the whole family. The renewal is the single flight shared with the interceptor.
+      if (this.rejectedToken || tokenNeedsRenewal(this.auth.accessToken)) {
+        try {
+          await firstValueFrom(this.auth.refreshToken());
+          this.rejectedToken = false;
+        } catch (error) {
+          if (isUnauthorized(error)) {
+            // The session is over: stop retrying and go back to sign-in.
+            if (generation === this.generation) {
+              this.auth.clear();
+              void this.router.navigate(['/login']);
+            }
+            return;
+          }
+          // Unreachable server: keep the backoff going.
+        }
       }
       if (generation === this.generation) {
         this.status.set('connecting');
