@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+      - run: dotnet restore DeskFlow.slnx
+      - run: dotnet format DeskFlow.slnx --verify-no-changes --no-restore
+      - run: dotnet build DeskFlow.slnx --no-restore -c Release
+      - run: dotnet test DeskFlow.slnx --no-build -c Release
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test -- --no-watch
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [dotnet, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build images
+        run: |
+          docker build -f docker/dotnet.Dockerfile --build-arg PROJECT=Desk.Api -t deskflow-api .
+          docker build -f docker/dotnet.Dockerfile --build-arg PROJECT=Desk.Worker -t deskflow-worker .
+          docker build -f docker/web.Dockerfile -t deskflow-web .

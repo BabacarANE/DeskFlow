@@ -1,0 +1,16 @@
+/*
+ * Locked palette (SPEC section 10). The only place hex values are allowed.
+ * Per-tenant themes override these variables on :root at runtime (phase 4).
+ */
+@theme static {
+  --color-primary: #7cc4ee; /* Bleu ciel */
+  --color-surface: #f4f7fa; /* Blanc nuage */
+  --color-accent: #d63a14; /* Rouge ambré */
+  --color-ink: #14212b;
+  --color-ink-muted: #5b6b79;
+}
+
+:root {
+  --on-primary: #0b2a3c;
+  --on-accent: #ffffff;
+}

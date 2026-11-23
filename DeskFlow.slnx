@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Desk.Api/Desk.Api.csproj" />
+    <Project Path="src/Desk.Core/Desk.Core.csproj" />
+    <Project Path="src/Desk.Infrastructure/Desk.Infrastructure.csproj" />
+    <Project Path="src/Desk.Worker/Desk.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Desk.IntegrationTests/Desk.IntegrationTests.csproj" />
+    <Project Path="tests/Desk.UnitTests/Desk.UnitTests.csproj" />
+  </Folder>
+</Solution>
