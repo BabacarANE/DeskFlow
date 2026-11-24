@@ -207,4 +207,70 @@ public class NulCharacterEdgeTests(PostgresFixture postgres) : TicketTestBase(po
         Assert.Equal(0, await QueryDbAsync(db => db.KnowledgeArticles.IgnoreQueryFilters().CountAsync()));
         Assert.Equal(HttpStatusCode.OK, (await agent.GetAsync("/api/v1/articles")).StatusCode);
     }
+
+    /// <summary>A body whose length is unknown: sent chunked, no Content-Length.</summary>
+    private sealed class UnknownLengthContent(byte[] bytes) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) => stream.WriteAsync(bytes).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    [Fact]
+    public async Task Empty_bodies_a_byte_order_mark_and_chunked_bodies_are_handled_like_the_binder_would()
+    {
+        var c = await BuildCompanyAsync("nul-empty");
+        var agent = c.Agent.Session;
+        var valid = "{\"title\":\"Titre valide\",\"symptom\":\"s\",\"cause\":\"c\",\"solution\":\"v\",\"tags\":[]}"u8.ToArray();
+        var article = await JsonAsync(await agent.PostAsync("/api/v1/articles", new { title = "Titre", symptom = "s", cause = "c", solution = "v", tags = Array.Empty<string>() }));
+        var id = article.GetProperty("id").GetGuid();
+
+        // Empty body with a JSON content type: endpoints without a body behave as before (no 400 from the guard).
+        var publish = await Raw(agent, $"/api/v1/articles/{id}/publish", []);
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        var unpublish = await Raw(agent, $"/api/v1/articles/{id}/unpublish", []);
+        Assert.Equal(HttpStatusCode.OK, unpublish.StatusCode);
+        var list = await Raw(agent, "/api/v1/articles", [], HttpMethod.Get);
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+
+        var logout = agent.Request(HttpMethod.Post, "/api/v1/auth/logout");
+        logout.Headers.Add("Cookie", $"deskflow_refresh={agent.RefreshCookie}");
+        logout.Content = new ByteArrayContent([]);
+        logout.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        Assert.Equal(HttpStatusCode.NoContent, (await Http.SendAsync(logout)).StatusCode);
+
+        var refresh = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh") { Content = new ByteArrayContent([]) };
+        refresh.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        refresh.Headers.Add("Cookie", $"deskflow_refresh={c.Admin.Session.RefreshCookie}");
+        Assert.Equal(HttpStatusCode.OK, (await Http.SendAsync(refresh)).StatusCode);
+
+        // An endpoint that needs a body keeps the framework's answer for a missing one: the guard stays out of it. Measured
+        // with the guard unregistered, the answer is the same (a 500 of the framework itself, not caused by the guard).
+        var missing = await Raw(agent, "/api/v1/articles", []);
+        Assert.Equal(HttpStatusCode.InternalServerError, missing.StatusCode);
+        Assert.DoesNotContain("UTF-8", await missing.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("JSON valide", await missing.Content.ReadAsStringAsync());
+
+        // A byte order mark before a valid document is accepted by the guard and the binder.
+        var withBom = await Raw(agent, "/api/v1/articles", [0xEF, 0xBB, 0xBF, .. valid]);
+        Assert.Equal(HttpStatusCode.Created, withBom.StatusCode);
+        var bomNul = await Raw(agent, "/api/v1/articles", [0xEF, 0xBB, 0xBF, .. "{\"title\":\"a\\u0000b\"}"u8]);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, bomNul.StatusCode);
+
+        // Chunked (no Content-Length): a valid body goes through, an oversized one is a 413.
+        var chunked = agent.Request(HttpMethod.Post, "/api/v1/articles");
+        chunked.Content = new UnknownLengthContent(valid);
+        chunked.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        Assert.Null(chunked.Content.Headers.ContentLength);
+        Assert.Equal(HttpStatusCode.Created, (await agent.Http.SendAsync(chunked)).StatusCode);
+
+        var chunkedHuge = agent.Request(HttpMethod.Post, "/api/v1/articles");
+        chunkedHuge.Content = new UnknownLengthContent(Encoding.UTF8.GetBytes("{\"title\":\"" + new string('a', 1_100_000) + "\"}"));
+        chunkedHuge.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await agent.Http.SendAsync(chunkedHuge)).StatusCode);
+    }
 }

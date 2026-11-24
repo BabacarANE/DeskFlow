@@ -58,23 +58,30 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                 return;
             }
 
-            // Invalid UTF-8 makes the framework binder throw (500): refuse it here as the 400 it deserves.
-            if (!System.Text.Unicode.Utf8.IsValid(body))
+            // An empty body is not this guard's business (endpoints without body, GET): the binder decides.
+            if (body.Length > 0)
             {
-                await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas de l'UTF-8 valide.").ExecuteAsync(http);
-                return;
-            }
+                // A UTF-8 byte order mark before a valid document is tolerated (System.Text.Json skips it too).
+                var json = body.AsSpan(body.Length >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF ? 3 : 0);
 
-            // Malformed or too deeply nested JSON: the same 400 the binder gives, instead of a 500 from its internals.
-            if (!Scan(body, out var field))
-            {
-                await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas un JSON valide.").ExecuteAsync(http);
-                return;
-            }
+                // Invalid UTF-8 makes the framework binder throw (500): refuse it here as the 400 it deserves.
+                if (!System.Text.Unicode.Utf8.IsValid(json))
+                {
+                    await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas de l'UTF-8 valide.").ExecuteAsync(http);
+                    return;
+                }
 
-            if (field is not null)
-            {
-                errors[field] = [Message];
+                // Malformed or too deeply nested JSON: the same 400 the binder gives, instead of a 500 from its internals.
+                if (!Scan(json, out var field))
+                {
+                    await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas un JSON valide.").ExecuteAsync(http);
+                    return;
+                }
+
+                if (field is not null)
+                {
+                    errors[field] = [Message];
+                }
             }
         }
 
