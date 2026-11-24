@@ -161,4 +161,14 @@ describe('SlaSettings', () => {
     await settle();
     expect(input('first', 0)).not.toBeNull();
   });
+
+  it('drops the saved confirmation as soon as a field is edited', async () => {
+    api.updateSlaPolicies.mockReturnValue(of(POLICIES));
+    await render();
+    save().click();
+    await settle();
+    expect(el().textContent).toContain('Délais enregistrés');
+    type('first', 0, '1000');
+    expect(el().textContent).not.toContain('Délais enregistrés');
+  });
 });

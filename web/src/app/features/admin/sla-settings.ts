@@ -185,6 +185,13 @@ export class SlaSettings implements OnInit {
   protected readonly rows = new FormArray<Row>([]);
   protected readonly form = new FormGroup({ rows: this.rows });
 
+  constructor() {
+    // An edit makes the "saved" confirmation obsolete.
+    this.form.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.saved.set(false));
+  }
+
   protected readonly status = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly loadError = signal('');
   protected readonly busy = signal(false);

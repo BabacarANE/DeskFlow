@@ -272,28 +272,32 @@ export class ThemeSettings implements OnInit {
   });
 
   protected readonly warnings = computed(() => {
-    const server = this.serverWarnings();
-    if (server.length > 0) return server;
     const theme = this.previewTheme();
-    if (!theme) return [];
-    const warnings: string[] = [];
+    // Warnings of the API (after a save) and local ones are merged, without duplicates.
+    const warnings = new Set<string>(this.serverWarnings());
+    if (!theme) return [...warnings];
     if (accentContrastWarning(theme.colorAccent, theme.colorSurface)) {
-      warnings.push(ACCENT_CONTRAST_WARNING);
+      warnings.add(ACCENT_CONTRAST_WARNING);
     }
-    // The text on the primary and accent colours is dark or white, whichever reads better;
-    // for a mid-tone neither reaches 4.5:1 (computed here, the API does not check it).
+    const ink = this.themeService.inkContrast(theme.colorSurface);
+    if (ink !== null && ink < MIN_TEXT_CONTRAST) {
+      warnings.add(
+        `Le texte principal n’atteint que ${formatRatio(ink)} de contraste sur cette couleur de fond (4,5:1 recommandé) : choisissez un fond plus clair.`,
+      );
+    }
+    // Safety net: the text on primary and accent is dark, white or black, whichever reads best.
     for (const [label, color] of [
       ['principale', theme.colorPrimary],
       ['d’accent', theme.colorAccent],
     ] as const) {
       const ratio = this.themeService.textContrast(color);
       if (ratio < MIN_TEXT_CONTRAST) {
-        warnings.push(
+        warnings.add(
           `Le texte affiché sur la couleur ${label} n’atteint que ${formatRatio(ratio)} de contraste (4,5:1 recommandé) : choisissez une couleur plus claire ou plus foncée.`,
         );
       }
     }
-    return warnings;
+    return [...warnings];
   });
 
   protected readonly ratioLabel = computed(() => {

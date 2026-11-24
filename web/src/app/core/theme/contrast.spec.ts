@@ -2,6 +2,7 @@ import {
   ACCENT_CONTRAST_WARNING,
   MIN_TEXT_CONTRAST,
   accentContrastWarning,
+  chooseOnColor,
   chosenTextContrast,
   contrastRatio,
   luminance,
@@ -25,11 +26,37 @@ describe('contrast (phase 4)', () => {
     }
   });
 
-  it('reports mid-tones the real dark text colour can not serve at 4.5:1', () => {
-    const dark = luminance('#0B2A3C');
-    expect(chosenTextContrast('#7C7C7C')).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
-    expect(chosenTextContrast('#7C7C7C', dark, 1)).toBeLessThan(MIN_TEXT_CONTRAST);
-    expect(chosenTextContrast('#7CC4EE', dark, 1)).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+  describe('on-colour rule: dark, then light, then darkest', () => {
+    const real = { dark: luminance('#0B2A3C'), light: 1, darkest: 0 };
+
+    it('keeps the default palette choices', () => {
+      expect(chooseOnColor('#7CC4EE', real).choice).toBe('dark');
+      expect(chooseOnColor('#D63A14', real).choice).toBe('light');
+    });
+
+    it('falls back to the darkest text on mid-tones the other two can not serve', () => {
+      for (const grey of ['#7C7C7C', '#828282']) {
+        const result = chooseOnColor(grey, real);
+        expect(result.choice, grey).toBe('darkest');
+        expect(result.ratio, grey).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+      }
+      expect(chosenTextContrast('#828282', real)).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+    });
+
+    it('always reaches 4.5:1 over a sample of the RGB cube', () => {
+      const steps = [0, 40, 80, 120, 130, 160, 200, 255];
+      const hex = (n: number) => n.toString(16).padStart(2, '0');
+      for (const r of steps) {
+        for (const g of steps) {
+          for (const b of steps) {
+            const background = `#${hex(r)}${hex(g)}${hex(b)}`;
+            expect(chosenTextContrast(background, real), background).toBeGreaterThanOrEqual(
+              MIN_TEXT_CONTRAST,
+            );
+          }
+        }
+      }
+    });
   });
 
   it('flags a pale accent on a pale surface and accepts the default pair', () => {

@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  inject,
+  signal,
+} from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
@@ -20,7 +29,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
   imports: [ReactiveFormsModule, FieldError, StatusMessage],
   template: `
     <section class="card space-y-4" aria-labelledby="categories-title">
-      <h2 id="categories-title" class="text-xl font-semibold">Catégories</h2>
+      <h2 id="categories-title" tabindex="-1" class="text-xl font-semibold">Catégories</h2>
 
       <form [formGroup]="addForm" (ngSubmit)="add()" novalidate class="space-y-1">
         <label for="category-new" class="mb-1 block text-sm font-medium">
@@ -100,7 +109,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
                       <button
                         type="button"
                         class="btn btn-secondary btn-small"
-                        (click)="cancelEdit()"
+                        (click)="cancelEdit(category)"
                       >
                         Annuler
                       </button>
@@ -113,6 +122,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
                         type="button"
                         class="btn btn-secondary btn-small"
                         [disabled]="busy()"
+                        [id]="'category-confirm-' + category.id"
                         (click)="remove(category)"
                       >
                         Confirmer
@@ -121,7 +131,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
                       <button
                         type="button"
                         class="btn btn-secondary btn-small"
-                        (click)="confirmId.set(null)"
+                        (click)="cancelDelete(category)"
                       >
                         Annuler
                       </button>
@@ -129,6 +139,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
                       <button
                         type="button"
                         class="btn btn-secondary btn-small"
+                        [id]="'category-rename-' + category.id"
                         (click)="startEdit(category)"
                       >
                         Renommer
@@ -137,6 +148,7 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
                       <button
                         type="button"
                         class="btn btn-secondary btn-small"
+                        [id]="'category-delete-' + category.id"
                         (click)="askDelete(category)"
                       >
                         Supprimer
@@ -156,6 +168,8 @@ export const CATEGORY_DUPLICATE_MESSAGE = 'Une catégorie porte déjà ce nom.';
 export class CategoriesAdmin implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly fb = inject(NonNullableFormBuilder);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   protected readonly nameMax = NAME_MAX;
   protected readonly addForm = this.fb.group({
@@ -209,6 +223,7 @@ export class CategoriesAdmin implements OnInit {
       const created = await firstValueFrom(this.api.createCategory(name));
       this.categories.update((list) => this.sorted([...list, created]));
       this.addForm.reset({ name: '' });
+      this.focus('#category-new');
     } catch (err) {
       this.showWriteError(err, this.addForm);
     } finally {
@@ -221,10 +236,24 @@ export class CategoriesAdmin implements OnInit {
     this.actionError.set(null);
     this.renameForm.reset({ name: category.name });
     this.editingId.set(category.id);
+    this.focus(`#category-name-${category.id}`);
   }
 
-  protected cancelEdit(): void {
+  protected cancelEdit(category: Category): void {
     this.editingId.set(null);
+    this.focus(`#category-rename-${category.id}`);
+  }
+
+  protected cancelDelete(category: Category): void {
+    this.confirmId.set(null);
+    this.focus(`#category-delete-${category.id}`);
+  }
+
+  /** Moves the keyboard focus once the next render has put the target in the page. */
+  private focus(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 
   protected async rename(category: Category): Promise<void> {
@@ -236,6 +265,7 @@ export class CategoriesAdmin implements OnInit {
     }
     if (name === category.name) {
       this.editingId.set(null);
+      this.focus(`#category-rename-${category.id}`);
       return;
     }
     this.busy.set(true);
@@ -245,6 +275,7 @@ export class CategoriesAdmin implements OnInit {
         this.sorted(list.map((c) => (c.id === updated.id ? updated : c))),
       );
       this.editingId.set(null);
+      this.focus(`#category-rename-${category.id}`);
     } catch (err) {
       this.showWriteError(err, this.renameForm);
     } finally {
@@ -256,6 +287,7 @@ export class CategoriesAdmin implements OnInit {
     this.editingId.set(null);
     this.actionError.set(null);
     this.confirmId.set(category.id);
+    this.focus(`#category-confirm-${category.id}`);
   }
 
   protected async remove(category: Category): Promise<void> {
@@ -264,12 +296,16 @@ export class CategoriesAdmin implements OnInit {
     try {
       await firstValueFrom(this.api.deleteCategory(category.id));
       this.categories.update((list) => list.filter((c) => c.id !== category.id));
+      // The row is gone: the focus goes back to the section heading.
+      this.focus('#categories-title');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         this.actionError.set(CATEGORY_IN_USE_MESSAGE);
+        this.focus(`#category-delete-${category.id}`);
       } else if (err instanceof ApiError && err.status === 404) {
         // Already deleted elsewhere: the list is simply out of date.
         this.categories.update((list) => list.filter((c) => c.id !== category.id));
+        this.focus('#categories-title');
       } else {
         this.actionError.set(errorMessage(err));
       }

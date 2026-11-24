@@ -172,4 +172,31 @@ describe('CategoriesAdmin', () => {
     expect(el().querySelector('[role="alert"]')?.textContent).toContain(CATEGORY_IN_USE_MESSAGE);
     expect(names()).toEqual(['Accès et comptes', 'Matériel']);
   });
+
+  it('moves the keyboard focus to the control that matters after each step', async () => {
+    api.deleteCategory.mockReturnValue(of(undefined));
+    await render();
+    const active = () => document.activeElement?.id;
+
+    button('Supprimer', row(0))?.click();
+    await settle();
+    expect(active()).toBe('category-confirm-c1');
+    button('Annuler', row(0))?.click();
+    await settle();
+    expect(active()).toBe('category-delete-c1');
+
+    button('Renommer', row(1))?.click();
+    await settle();
+    expect(active()).toBe('category-name-c2');
+    button('Annuler', row(1))?.click();
+    await settle();
+    expect(active()).toBe('category-rename-c2');
+
+    button('Supprimer', row(0))?.click();
+    await settle();
+    button('Confirmer', row(0))?.click();
+    await settle();
+    // The row is gone: the focus lands on the section heading, not on the page body.
+    expect(active()).toBe('categories-title');
+  });
 });

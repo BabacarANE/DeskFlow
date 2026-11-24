@@ -62,21 +62,41 @@ export function normalizeHex(value: string): string {
   return value.trim().toUpperCase();
 }
 
-/**
- * Contrast of the text colour chosen by onColorFor on a background. With pure black and white it
- * is always at least 4.5:1 (about 4.58:1 at worst); with the real dark text colour of tokens.css
- * the mid-tones can fall below, which the theme screen reports as a warning.
- */
-export function chosenTextContrast(
-  background: string,
-  darkLuminance = 0,
-  lightLuminance = 1,
-): number {
-  const textLuminance =
-    onColorFor(background, darkLuminance, lightLuminance) === 'dark'
-      ? darkLuminance
-      : lightLuminance;
-  return contrastWithLuminance(background, textLuminance);
+export const MIN_TEXT_CONTRAST = 4.5;
+
+export type OnChoice = 'dark' | 'light' | 'darkest';
+
+/** Relative luminances of the three text candidates (--on-dark, --on-light, --on-darkest). */
+export interface OnLuminances {
+  dark: number;
+  light: number;
+  darkest: number;
 }
 
-export const MIN_TEXT_CONTRAST = 4.5;
+export const PURE_LUMINANCES: OnLuminances = { dark: 0, light: 1, darkest: 0 };
+
+/**
+ * Text colour for a background: the first of dark, light, darkest that reaches 4.5:1; if none
+ * does, the best contrast of the three. Black or white reaches 4.5:1 on any background, so with
+ * the fallback every background is served.
+ */
+export function chooseOnColor(
+  background: string,
+  lums: OnLuminances = PURE_LUMINANCES,
+): { choice: OnChoice; ratio: number } {
+  const order: OnChoice[] = ['dark', 'light', 'darkest'];
+  const scored = order.map((choice) => ({
+    choice,
+    ratio: contrastWithLuminance(background, lums[choice]),
+  }));
+  const first = scored.find((c) => c.ratio >= MIN_TEXT_CONTRAST);
+  return first ?? scored.reduce((best, c) => (c.ratio > best.ratio ? c : best));
+}
+
+/** Contrast of the text colour chosen by chooseOnColor on a background. */
+export function chosenTextContrast(
+  background: string,
+  lums: OnLuminances = PURE_LUMINANCES,
+): number {
+  return chooseOnColor(background, lums).ratio;
+}

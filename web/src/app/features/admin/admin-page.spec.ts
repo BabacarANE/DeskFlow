@@ -46,7 +46,7 @@ describe('AdminPage tabs', () => {
   });
 
   it('links each tab to its panel and keeps only the selected tab in the tab order', () => {
-    const panel = el().querySelector('[role="tabpanel"]') as HTMLElement;
+    const panel = el().querySelector('[role="tabpanel"]:not([hidden])') as HTMLElement;
     expect(panel.getAttribute('aria-labelledby')).toBe(selected()?.id);
     expect(selected()?.getAttribute('aria-controls')).toBe(panel.id);
     expect(tabs().filter((t) => t.getAttribute('tabindex') === '0')).toHaveLength(1);
@@ -59,7 +59,26 @@ describe('AdminPage tabs', () => {
     fixture.detectChanges();
     expect(selected()?.textContent).toContain('Catégories');
     expect(el().querySelector('app-categories-admin')).not.toBeNull();
-    expect(el().querySelector('app-users-list')).toBeNull();
+    // The first panel is only hidden, not destroyed.
+    expect((el().querySelector('#admin-panel-users') as HTMLElement).hidden).toBe(true);
+  });
+
+  it('keeps an unsaved edit when the user changes tab and comes back', async () => {
+    const go = async (index: number) => {
+      tabs()[index].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    };
+    await go(2);
+    const input = el().querySelector('#category-new') as HTMLInputElement;
+    input.value = 'Brouillon de saisie';
+    input.dispatchEvent(new Event('input'));
+    await go(0);
+    await go(2);
+    expect((el().querySelector('#category-new') as HTMLInputElement).value).toBe(
+      'Brouillon de saisie',
+    );
   });
 
   it('moves with the arrow keys, Home and End, wrapping around', () => {

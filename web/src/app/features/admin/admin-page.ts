@@ -51,38 +51,49 @@ export const ADMIN_TABS: { id: AdminTab; label: string }[] = [
         </div>
       </div>
 
-      <div
-        role="tabpanel"
-        [id]="'admin-panel-' + active()"
-        [attr.aria-labelledby]="'admin-tab-' + active()"
-      >
-        @switch (active()) {
-          @case ('users') {
-            <app-users-list />
-          }
-          @case ('invitations') {
-            <app-invitations-list />
-          }
-          @case ('categories') {
-            <app-categories-admin />
-          }
-          @case ('sla') {
-            <app-sla-settings />
-          }
-          @case ('theme') {
-            <app-theme-settings />
-          }
+      <!--
+        A panel is created on the first visit, then only hidden: an unsaved edit (theme, SLA) is
+        kept when the user moves to another tab and comes back.
+      -->
+      @for (tab of tabs; track tab.id) {
+        @if (visited().has(tab.id)) {
+          <div
+            role="tabpanel"
+            [id]="'admin-panel-' + tab.id"
+            [attr.aria-labelledby]="'admin-tab-' + tab.id"
+            [hidden]="active() !== tab.id"
+          >
+            @switch (tab.id) {
+              @case ('users') {
+                <app-users-list />
+              }
+              @case ('invitations') {
+                <app-invitations-list />
+              }
+              @case ('categories') {
+                <app-categories-admin />
+              }
+              @case ('sla') {
+                <app-sla-settings />
+              }
+              @case ('theme') {
+                <app-theme-settings />
+              }
+            }
+          </div>
         }
-      </div>
+      }
     </div>
   `,
 })
 export class AdminPage {
   protected readonly tabs = ADMIN_TABS;
   protected readonly active = signal<AdminTab>('users');
+  protected readonly visited = signal<ReadonlySet<AdminTab>>(new Set<AdminTab>(['users']));
 
   protected select(tab: AdminTab): void {
     this.active.set(tab);
+    this.visited.update((set) => (set.has(tab) ? set : new Set([...set, tab])));
   }
 
   protected onKey(event: KeyboardEvent, current: AdminTab): void {

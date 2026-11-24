@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Theme } from '../api/models';
-import { chosenTextContrast, isHexColor, luminance, onColorFor } from './contrast';
+import { OnLuminances, chooseOnColor, contrastRatio, isHexColor, luminance } from './contrast';
 
 const MANAGED_PROPERTIES = [
   '--color-primary',
@@ -47,13 +47,15 @@ export class ThemeService {
     };
   }
 
-  /** Contrast of the text colour (--on-dark or --on-light) that `--on-*` would use on a background. */
+  /** Contrast of the text colour that `--on-*` would use on a background (same rule as apply). */
   textContrast(background: string): number {
-    return chosenTextContrast(
-      background,
-      this.luminanceOf('--on-dark', 0),
-      this.luminanceOf('--on-light', 1),
-    );
+    return chooseOnColor(background, this.luminances()).ratio;
+  }
+
+  /** Contrast of the main text colour (--color-ink) on a surface, or null when it is unknown. */
+  inkContrast(surface: string): number | null {
+    const ink = getComputedStyle(this.root).getPropertyValue('--color-ink').trim();
+    return isHexColor(ink) ? contrastRatio(ink, surface) : null;
   }
 
   reset(): void {
@@ -61,9 +63,15 @@ export class ThemeService {
   }
 
   private onVariable(background: string): string {
-    const dark = this.luminanceOf('--on-dark', 0);
-    const light = this.luminanceOf('--on-light', 1);
-    return onColorFor(background, dark, light) === 'dark' ? 'var(--on-dark)' : 'var(--on-light)';
+    return `var(--on-${chooseOnColor(background, this.luminances()).choice})`;
+  }
+
+  private luminances(): OnLuminances {
+    return {
+      dark: this.luminanceOf('--on-dark', 0),
+      light: this.luminanceOf('--on-light', 1),
+      darkest: this.luminanceOf('--on-darkest', 0),
+    };
   }
 
   /** Luminance of a token defined in tokens.css, so the choice uses the real text colours. */

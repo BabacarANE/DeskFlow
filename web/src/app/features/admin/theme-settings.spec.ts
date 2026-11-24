@@ -135,18 +135,23 @@ describe('ThemeSettings', () => {
     expect(el().querySelector('[aria-label="Avertissements"]')).toBeNull();
   });
 
-  it('warns when no text colour reaches 4.5:1 on a mid-tone with the real dark colour', async () => {
+  it('does not warn on a mid-tone the darkest fallback serves, but does when no text can', async () => {
     root.style.setProperty('--on-dark', '#0B2A3C');
     root.style.setProperty('--on-light', '#FFFFFF');
+    root.style.setProperty('--on-darkest', '#000000');
     try {
       await render();
-      type('colorPrimary', '#7C7C7C');
+      type('colorPrimary', '#828282');
+      expect(el().querySelector('[aria-label="Avertissements"]')).toBeNull();
+      // Safety net: with a broken fallback token, nothing reaches 4.5:1.
+      root.style.setProperty('--on-darkest', '#828282');
+      type('colorPrimary', '#838383');
       expect(el().querySelector('[aria-label="Avertissements"]')?.textContent).toContain(
         'couleur principale',
       );
     } finally {
-      root.style.removeProperty('--on-dark');
-      root.style.removeProperty('--on-light');
+      for (const name of ['--on-dark', '--on-light', '--on-darkest'])
+        root.style.removeProperty(name);
     }
   });
 
@@ -249,5 +254,51 @@ describe('ThemeSettings', () => {
     expect(interactive).toHaveLength(1);
     expect(preview().querySelector('button')).toBeNull();
     expect(preview().querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('merges API and local warnings without duplicates', async () => {
+    const local =
+      'Le contraste entre la couleur d’accent et la surface est inférieur à 3:1 : l’accent risque d’être difficile à repérer.';
+    api.updateTheme.mockReturnValue(
+      of({
+        theme: { ...DEFAULTS, colorAccent: '#E8EEF3' },
+        warnings: [local, 'Avertissement du serveur.'],
+      }),
+    );
+    await render();
+    type('colorAccent', '#E8EEF3');
+    button('Enregistrer le thème')?.click();
+    await settle();
+    const items = Array.from(el().querySelectorAll('[aria-label="Avertissements"] li')).map((li) =>
+      li.textContent?.trim(),
+    );
+    expect(items.filter((t) => t === local)).toHaveLength(1);
+    expect(items).toContain('Avertissement du serveur.');
+  });
+
+  it('warns when the main text lacks contrast on the chosen surface', async () => {
+    root.style.setProperty('--color-ink', '#14212B');
+    try {
+      await render();
+      expect(el().querySelector('[aria-label="Avertissements"]')).toBeNull();
+      type('colorSurface', '#202830');
+      expect(el().querySelector('[aria-label="Avertissements"]')?.textContent).toContain(
+        'texte principal',
+      );
+    } finally {
+      root.style.removeProperty('--color-ink');
+    }
+  });
+
+  it('keeps the on-colours of the preview and of the application identical', async () => {
+    await render();
+    type('colorPrimary', '#828282');
+    api.updateTheme.mockReturnValue(
+      of({ theme: { ...DEFAULTS, colorPrimary: '#828282' }, warnings: [] }),
+    );
+    const previewOn = preview().style.getPropertyValue('--on-primary');
+    button('Enregistrer le thème')?.click();
+    await settle();
+    expect(rootVar('--on-primary')).toBe(previewOn);
   });
 });
