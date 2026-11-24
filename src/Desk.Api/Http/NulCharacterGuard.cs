@@ -37,6 +37,12 @@ public sealed class NulCharacterGuard(RequestDelegate next)
 
         if (http.Request.HasJsonContentType())
         {
+            if (http.Request.ContentLength > MaxBodyBytes)
+            {
+                await Results.Problem(statusCode: 413, title: "Corps de requête trop volumineux").ExecuteAsync(http);
+                return;
+            }
+
             byte[] body;
             try
             {
@@ -46,13 +52,27 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                 body = memory.ToArray();
                 http.Request.Body.Position = 0;
             }
-            catch (InvalidDataException)
+            catch (Exception e) when (e is InvalidDataException or IOException)
             {
                 await Results.Problem(statusCode: 413, title: "Corps de requête trop volumineux").ExecuteAsync(http);
                 return;
             }
 
-            if (FindNul(body) is { } field)
+            // Invalid UTF-8 makes the framework binder throw (500): refuse it here as the 400 it deserves.
+            if (!System.Text.Unicode.Utf8.IsValid(body))
+            {
+                await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas de l'UTF-8 valide.").ExecuteAsync(http);
+                return;
+            }
+
+            // Malformed or too deeply nested JSON: the same 400 the binder gives, instead of a 500 from its internals.
+            if (!Scan(body, out var field))
+            {
+                await Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps n'est pas un JSON valide.").ExecuteAsync(http);
+                return;
+            }
+
+            if (field is not null)
             {
                 errors[field] = [Message];
             }
@@ -76,9 +96,13 @@ public sealed class NulCharacterGuard(RequestDelegate next)
         public string Name { get; set; } = "";
     }
 
-    /// <summary>Path (<c>policies[0].priority</c>) of the first string, or property name, holding a NUL; null if none. Malformed JSON is left to the binder.</summary>
-    public static string? FindNul(ReadOnlySpan<byte> json)
+    /// <summary>Path (<c>policies[0].priority</c>) of the first string, or property name, holding a NUL; null if none. Malformed JSON, invalid UTF-8 or too deep a document are left to the binder (400).</summary>
+    public static string? FindNul(ReadOnlySpan<byte> json) => Scan(json, out var path) ? path : null;
+
+    /// <summary>False when the document is not readable JSON (malformed, invalid UTF-8, too deep); otherwise the NUL path, if any.</summary>
+    public static bool Scan(ReadOnlySpan<byte> json, out string? path)
     {
+        path = null;
         var reader = new Utf8JsonReader(json);
         var frames = new List<Frame>();
         try
@@ -91,7 +115,8 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                         frames[^1].Name = reader.GetString()!;
                         if (frames[^1].Name.Contains('\0'))
                         {
-                            return PathOf(frames).Replace("\0", "", StringComparison.Ordinal);
+                            path = PathOf(frames).Replace("\0", "", StringComparison.Ordinal);
+                            return true;
                         }
 
                         break;
@@ -106,7 +131,8 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                         Advance(frames);
                         if (reader.GetString()!.Contains('\0'))
                         {
-                            return PathOf(frames);
+                            path = PathOf(frames);
+                            return true;
                         }
 
                         break;
@@ -116,12 +142,12 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                 }
             }
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or InvalidOperationException or ArgumentException)
         {
-            return null;
+            return false;
         }
 
-        return null;
+        return true;
     }
 
     private static void Advance(List<Frame> frames)

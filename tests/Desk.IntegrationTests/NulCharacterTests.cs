@@ -131,12 +131,80 @@ public class NulCharacterGuardTests
     }
 
     [Fact]
+    public void Invalid_utf8_in_a_value_or_a_property_name_is_left_to_the_binder()
+    {
+        byte[] inValue = [.. "{\"a\":\""u8, 0xFF, 0xFE, .. "\"}"u8];
+        byte[] inName = [.. "{\"a"u8, 0xFF, .. "\":\"x\"}"u8];
+        Assert.Null(Desk.Api.Http.NulCharacterGuard.FindNul(inValue));
+        Assert.Null(Desk.Api.Http.NulCharacterGuard.FindNul(inName));
+    }
+
+    [Fact]
     public void Clean_malformed_and_empty_inputs_have_no_finding()
     {
         Assert.Null(Find("{\"title\":\"ok\",\"n\":[1,true,null,{\"x\":\"y\"}]}"));
         Assert.Null(Find("{\"title\":"));
         Assert.Null(Find("not json"));
         Assert.Null(Find(""));
+        Assert.Null(Find(new string('[', 200) + new string(']', 200)));
         Assert.Null(Find("{\"a\":\"back\\\\u0000slash\"}"));
+    }
+}
+
+public class NulCharacterEdgeTests(PostgresFixture postgres) : TicketTestBase(postgres)
+{
+    private static Task<HttpResponseMessage> Raw(Session s, string url, byte[] body, HttpMethod? method = null)
+    {
+        var request = s.Request(method ?? HttpMethod.Post, url);
+        request.Content = new ByteArrayContent(body);
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        return s.Http.SendAsync(request);
+    }
+
+    private static byte[] Bytes(string prefix, byte[] middle, string suffix) =>
+        [.. Encoding.UTF8.GetBytes(prefix), .. middle, .. Encoding.UTF8.GetBytes(suffix)];
+
+    [Fact]
+    public async Task Invalid_utf8_deep_or_huge_bodies_and_NUL_names_never_give_a_500()
+    {
+        var c = await BuildCompanyAsync("nul-edge");
+        var agent = c.Agent.Session;
+        byte[] bad = [0xFF, 0xFE];
+
+        // Invalid UTF-8 in a value, in a property name, and at the top level: the binder answers 400.
+        foreach (var body in new[]
+        {
+            Bytes("{\"title\":\"", bad, "\",\"symptom\":\"s\",\"cause\":\"c\",\"solution\":\"v\",\"tags\":[]}"),
+            Bytes("{\"ti", bad, "tle\":\"x\"}"),
+            Bytes("{\"a\":\"", bad, "\"}"),
+            Bytes("\"", bad, "\""),
+        })
+        {
+            var response = await Raw(agent, "/api/v1/articles", body);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        // A document nested beyond the reader limit: 400 as well.
+        var deep = new string('[', 200) + new string(']', 200);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Raw(agent, "/api/v1/articles", Encoding.UTF8.GetBytes(deep))).StatusCode);
+        var deepObject = string.Concat(Enumerable.Repeat("{\"a\":", 200)) + "1" + new string('}', 200);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Raw(agent, "/api/v1/articles", Encoding.UTF8.GetBytes(deepObject))).StatusCode);
+
+        // A body over 1 MB is refused with 413.
+        var huge = Encoding.UTF8.GetBytes("{\"title\":\"" + new string('a', 1_100_000) + "\"}");
+        var tooBig = await Raw(agent, "/api/v1/articles", huge);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tooBig.StatusCode);
+
+        // A NUL in a property name and in a query key: 422 with the cleaned name.
+        var nameResponse = await Raw(agent, "/api/v1/articles", Encoding.UTF8.GetBytes("{\"ti\\u0000tle\":\"x\"}"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, nameResponse.StatusCode);
+        Assert.True((await JsonAsync(nameResponse)).GetProperty("errors").TryGetProperty("title", out _));
+        var keyResponse = await agent.GetAsync("/api/v1/articles?%00q=1");
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, keyResponse.StatusCode);
+        Assert.True((await JsonAsync(keyResponse)).GetProperty("errors").TryGetProperty("query", out _));
+
+        // Nothing was written and the API still answers.
+        Assert.Equal(0, await QueryDbAsync(db => db.KnowledgeArticles.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(HttpStatusCode.OK, (await agent.GetAsync("/api/v1/articles")).StatusCode);
     }
 }
