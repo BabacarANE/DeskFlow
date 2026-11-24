@@ -18,8 +18,9 @@ export const SUGGESTION_COUNT = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink],
   template: `
-    <div aria-live="polite" class="mt-2">
-      <p class="sr-only">{{ announcement() }}</p>
+    <div class="mt-2">
+      <!-- Only the short summary is announced, not the whole list a second time. -->
+      <p class="sr-only" aria-live="polite">{{ announcement() }}</p>
       @if (suggestions().length > 0) {
         <div class="rounded-md border border-line bg-primary-soft p-3">
           <p id="suggestions-title" class="text-sm font-medium">
