@@ -10,5 +10,7 @@ Le navigateur ne peut pas poser d'en-tête sur un WebSocket, donc le JWT passe e
 ## Solution
 Bloc `location /hubs/` dédié avec `access_log off` (`docker/nginx.conf`), ADR 009 corrigé. Côté API, Serilog ne journalise que le chemin.
 
+Limite : `access_log off` ne couvre pas le journal d'erreur de nginx, qui reprend la ligne de requête (query string comprise) lors d'un échec amont. Risque accepté et consigné dans l'ADR 009 (jeton valable 15 min, journaux non exposés).
+
 ## Pour l'éviter
 Tout proxy devant l'API doit exclure la query string du hub de ses journaux.

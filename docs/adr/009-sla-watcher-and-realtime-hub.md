@@ -14,4 +14,4 @@ La tranche B ajoute la détection de dépassement de SLA, l'escalade et les noti
 
 ## Conséquences
 - 15 entités au lieu de 13 (SPEC section 6).
-- Le proxy nginx du compose (`docker/nginx.conf`) coupe le journal d'accès du bloc `/hubs/` pour que le jeton ne finisse pas dans `docker logs` ; tout autre proxy devra faire de même. Côté API, Serilog ne journalise pas la query string.
+- Le proxy nginx du compose (`docker/nginx.conf`) coupe le journal d'accès du bloc `/hubs/` pour que le jeton ne finisse pas dans le journal d'accès ; tout autre proxy devra faire de même. Risque résiduel accepté : en cas d'échec amont (API arrêtée ou en redémarrage), nginx écrit la ligne `request: "GET /hubs/...?access_token=..."` dans son journal d'erreur, qui va aussi dans `docker logs` ; le jeton expire en 15 min et ces journaux ne sont pas exposés. Côté API, Serilog ne journalise pas la query string.
