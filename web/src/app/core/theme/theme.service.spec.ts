@@ -87,7 +87,8 @@ describe('ThemeService', () => {
     document.documentElement.style.setProperty('--on-light', '#FFFFFF');
     try {
       service.apply({ colorPrimary: '#7C7C7C', colorSurface: '#FAFAFA', colorAccent: '#FFD400' });
-      expect(read('--on-primary')).toBe('var(--on-light)');
+      // Neither the real dark text nor white reaches 4.5:1 on this grey: the darkest fallback does.
+      expect(read('--on-primary')).toBe('var(--on-darkest)');
     } finally {
       document.documentElement.style.removeProperty('--on-dark');
       document.documentElement.style.removeProperty('--on-light');
@@ -122,5 +123,38 @@ describe('ThemeService', () => {
     ]) {
       expect(read(name)).toBe('');
     }
+  });
+});
+
+describe('ThemeService.variablesFor', () => {
+  it('uses the same on-colour rule for the preview and for :root', () => {
+    const service = TestBed.inject(ThemeService);
+    service.reset();
+    const theme = { colorPrimary: '#828282', colorSurface: '#FAFAFA', colorAccent: '#D63A14' };
+    const preview = service.variablesFor(theme);
+    service.apply(theme);
+    expect(document.documentElement.style.getPropertyValue('--on-primary')).toBe(
+      preview['--on-primary'],
+    );
+    expect(service.textContrast('#828282')).toBeGreaterThanOrEqual(4.5);
+    service.reset();
+  });
+
+  it('returns the five variables without touching :root', () => {
+    const service = TestBed.inject(ThemeService);
+    service.reset();
+    const vars = service.variablesFor({
+      colorPrimary: '#102030',
+      colorSurface: '#FAFAFA',
+      colorAccent: '#FFD400',
+    });
+    expect(vars).toEqual({
+      '--color-primary': '#102030',
+      '--color-surface': '#FAFAFA',
+      '--color-accent': '#FFD400',
+      '--on-primary': 'var(--on-light)',
+      '--on-accent': 'var(--on-dark)',
+    });
+    expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('');
   });
 });

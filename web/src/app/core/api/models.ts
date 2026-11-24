@@ -223,3 +223,75 @@ export const AUTH_ERROR_CODES = [
   'tenant_suspended',
 ] as const;
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
+
+// Phase 4 contract (docs/api/openapi.json 0.3.0-phase4): articles, theme, SLA, categories.
+export type ArticleStatus = 'Draft' | 'Published';
+
+export interface ArticleSummary {
+  id: string;
+  title: string;
+  status: ArticleStatus;
+  tags: string[];
+  /** Start of the symptom, 200 characters at most. */
+  excerpt: string;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface Article {
+  id: string;
+  title: string;
+  symptom: string;
+  cause: string;
+  solution: string;
+  tags: string[];
+  status: ArticleStatus;
+  /** Set on drafts created from a resolved ticket (KbDraftConsumer). */
+  sourceTicketId: string | null;
+  author: UserRef;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface ArticleRequest {
+  /** 3 to 200 characters. */
+  title: string;
+  symptom: string;
+  cause: string;
+  solution: string;
+  /** 10 at most, 30 characters each, no comma. */
+  tags: string[];
+}
+
+/** Query of GET /articles. Absent keys are not sent. */
+export interface ArticleQuery {
+  q?: string;
+  /** Ignored by the API for a Requester. */
+  status?: ArticleStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ThemeUpdateResult {
+  theme: Theme;
+  /** Non-blocking warnings in French. */
+  warnings: string[];
+}
+
+export interface SlaPolicy {
+  priority: TicketPriority;
+  /** 1 to 43200. */
+  firstResponseMinutes: number;
+  /** 1 to 43200, at least firstResponseMinutes. */
+  resolutionMinutes: number;
+}
+
+export interface UpdateSlaPoliciesRequest {
+  /** Exactly one row per priority: Low, Normal, High, Urgent. */
+  policies: SlaPolicy[];
+}
+
+export interface CategoryRequest {
+  /** 1 to 60 characters, unique per tenant. */
+  name: string;
+}

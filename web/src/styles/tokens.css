@@ -13,6 +13,8 @@
 :root {
   --on-dark: #0b2a3c;
   --on-light: #ffffff;
+  /* Fallback text colour for mid-tones where neither --on-dark nor --on-light reaches 4.5:1. */
+  --on-darkest: #000000;
   --on-primary: var(--on-dark);
   --on-accent: var(--on-light);
 }

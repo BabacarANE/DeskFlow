@@ -43,12 +43,12 @@ export interface MockContext {
 const PROBLEM_BASE = 'https://deskflow.example/problems/';
 
 /** SLA minutes per priority (SPEC section 6): first response, resolution. */
-const SLA_MINUTES: Record<TicketPriority, [number, number]> = {
-  Urgent: [30, 240],
-  High: [120, 480],
-  Normal: [480, 1440],
-  Low: [1440, 4320],
-};
+function defaultSla(): Record<TicketPriority, [number, number]> {
+  return { Urgent: [30, 240], High: [120, 480], Normal: [480, 1440], Low: [1440, 4320] };
+}
+
+/** Editable through PUT /sla-policies; only tickets created afterwards use the new values. */
+let SLA_MINUTES = defaultSla();
 
 const PRIORITY_RANK: Record<TicketPriority, number> = { Low: 0, Normal: 1, High: 2, Urgent: 3 };
 const PRIORITIES = Object.keys(PRIORITY_RANK) as TicketPriority[];
@@ -237,6 +237,7 @@ export function mockTicketRefs(): { id: string; number: number; title: string }[
 
 export function resetMockTickets(): void {
   state = seed();
+  SLA_MINUTES = defaultSla();
 }
 
 function toSummary(t: MockTicket): TicketSummary {
@@ -539,6 +540,104 @@ function addComment(ctx: MockContext, t: MockTicket): MockResult {
   return { status: 201, body: comment };
 }
 
+const SLA_ORDER: TicketPriority[] = ['Low', 'Normal', 'High', 'Urgent'];
+const MAX_SLA_MINUTES = 43_200;
+
+function slaPolicies(ctx: MockContext): MockResult {
+  if (ctx.me.role !== 'TenantAdmin') return problem(403, 'Forbidden');
+  if (ctx.method === 'GET') {
+    return {
+      status: 200,
+      body: SLA_ORDER.map((priority) => ({
+        priority,
+        firstResponseMinutes: SLA_MINUTES[priority][0],
+        resolutionMinutes: SLA_MINUTES[priority][1],
+      })),
+    };
+  }
+  const policies = ((ctx.body ?? {}) as { policies?: Partial<SlaRow>[] }).policies;
+  const errors: Record<string, string[]> = {};
+  if (!Array.isArray(policies) || policies.length !== 4) {
+    errors['policies'] = ['Une ligne par priorité est attendue (Low, Normal, High, Urgent).'];
+  } else {
+    const seen = new Set(policies.map((p) => p.priority));
+    if (SLA_ORDER.some((p) => !seen.has(p))) {
+      errors['policies'] = ['Chaque priorité doit apparaître exactement une fois.'];
+    }
+    policies.forEach((row, i) => {
+      const first = row.firstResponseMinutes;
+      const resolution = row.resolutionMinutes;
+      const valid = (n: unknown): n is number =>
+        typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= MAX_SLA_MINUTES;
+      if (!valid(first)) {
+        errors[`policies[${i}].firstResponseMinutes`] = [
+          'Saisissez un nombre de minutes entre 1 et 43 200.',
+        ];
+      }
+      if (!valid(resolution)) {
+        errors[`policies[${i}].resolutionMinutes`] = [
+          'Saisissez un nombre de minutes entre 1 et 43 200.',
+        ];
+      } else if (valid(first) && resolution < first) {
+        errors[`policies[${i}].resolutionMinutes`] = [
+          'La résolution ne peut pas être plus courte que la première réponse.',
+        ];
+      }
+    });
+  }
+  if (Object.keys(errors).length > 0) return problem(422, 'Validation failed', undefined, errors);
+  const rows = policies as SlaRow[];
+  for (const row of rows)
+    SLA_MINUTES[row.priority] = [row.firstResponseMinutes, row.resolutionMinutes];
+  return { status: 200, body: rows.map((r) => ({ ...r })).sort(bySlaOrder) };
+}
+
+interface SlaRow {
+  priority: TicketPriority;
+  firstResponseMinutes: number;
+  resolutionMinutes: number;
+}
+
+function bySlaOrder(a: SlaRow, b: SlaRow): number {
+  return SLA_ORDER.indexOf(a.priority) - SLA_ORDER.indexOf(b.priority);
+}
+
+/** POST, PUT and DELETE of /categories (TenantAdmin). Names are unique per tenant. */
+function categoryWrite(ctx: MockContext, id: string | null): MockResult {
+  if (ctx.me.role !== 'TenantAdmin') return problem(403, 'Forbidden');
+  const category = id ? state.categories.find((c) => c.id === id) : null;
+  if (id && !category) return problem(404, 'Not found');
+  if (ctx.method === 'DELETE') {
+    if (state.tickets.some((t) => t.category?.id === id)) {
+      return problem(409, 'Category in use', 'category-in-use');
+    }
+    state.categories = state.categories.filter((c) => c.id !== id);
+    return { status: 204 };
+  }
+  const name = sanitise(((ctx.body ?? {}) as { name?: string }).name ?? '');
+  if (!name)
+    return problem(422, 'Validation failed', undefined, { name: ['Le nom est obligatoire.'] });
+  if (name.length > 60) {
+    return problem(422, 'Validation failed', undefined, {
+      name: ['Le nom ne peut pas dépasser 60 caractères.'],
+    });
+  }
+  if (state.categories.some((c) => c.id !== id && c.name.toLowerCase() === name.toLowerCase())) {
+    return problem(409, 'Duplicate name', 'duplicate-name');
+  }
+  if (category) {
+    // Tickets share the object, so the new name shows everywhere.
+    category.name = name;
+    return { status: 200, body: { ...category } };
+  }
+  const created: Category = {
+    id: `30000000-0000-4000-8000-${String(state.nextId++).padStart(12, '0')}`,
+    name,
+  };
+  state.categories.push(created);
+  return { status: 201, body: { ...created } };
+}
+
 /** Returns null when the path is not a ticket route (the caller keeps routing). */
 export function handleTicketRoutes(ctx: MockContext): MockResult | null {
   const { method, path, me } = ctx;
@@ -549,6 +648,13 @@ export function handleTicketRoutes(ctx: MockContext): MockResult | null {
       body: [...state.categories].sort((a, b) => a.name.localeCompare(b.name)),
     };
   }
+
+  if (path === '/categories' && method === 'POST') return categoryWrite(ctx, null);
+  const categoryMatch = /^\/categories\/([^/]+)$/.exec(path);
+  if (categoryMatch && (method === 'PUT' || method === 'DELETE')) {
+    return categoryWrite(ctx, categoryMatch[1]);
+  }
+  if (path === '/sla-policies' && (method === 'GET' || method === 'PUT')) return slaPolicies(ctx);
 
   if (path === '/assignees' || path === '/tickets' || path.startsWith('/tickets/')) {
     if (me.role === 'SuperAdmin') return problem(403, 'Forbidden');

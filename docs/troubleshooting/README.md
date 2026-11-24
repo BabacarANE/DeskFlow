@@ -22,6 +22,9 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [016](016-ef-migrations-tooling-worktree.md) | `dotnet ef` échoue dans un worktree et formate mal les migrations | Outillage |
 | [017](017-signalr-websocket-401-dotnet-client.md) | WebSocket du hub refusé en 401 alors que la négociation passait (tests) | Tests |
 | [018](018-hub-token-in-nginx-access-log.md) | Le jeton du hub SignalR apparaissait dans les journaux nginx | Docker |
+| [019](019-theme-preview-derived-tints.md) | L'aperçu du thème ne changeait pas de teinte | Frontend |
+| [020](020-angular-ngmodel-tests-ignored-input.md) | Les tests de recherche ne déclenchaient aucun appel API | Frontend |
+| [021](021-hex-in-comment-fails-no-hardcoded-hex.md) | Un hex dans un commentaire faisait échouer le test anti-hex | Frontend |
 | [022](022-regex-dollar-accepts-trailing-newline.md) | Une couleur `#123456\n` était acceptée par la validation du thème | API |
 | [023](023-nul-character-500.md) | Un caractère NUL dans une requête provoquait un 500 | API |
 | [024](024-sla-concurrent-put-deadlock.md) | Des `PUT /sla-policies` simultanés provoquaient un deadlock | API |

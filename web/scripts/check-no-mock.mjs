@@ -12,6 +12,7 @@ const markers = [
   'mock.local',
   'deskflow.example/problems',
   'Dana Demandeur',
+  'Le VPN refuse la connexion',
 ];
 const offenders = readdirSync(dir)
   .filter((f) => f.endsWith('.js'))

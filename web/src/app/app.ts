@@ -15,6 +15,11 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: 'Tickets', path: '/tickets', roles: ['TenantAdmin', 'Agent', 'Requester'] },
+  {
+    label: 'Base de connaissances',
+    path: '/kb',
+    roles: ['TenantAdmin', 'Agent', 'Requester'],
+  },
   { label: 'Administration', path: '/admin', roles: ['TenantAdmin'] },
   { label: 'Entreprises', path: '/platform/tenants', roles: ['SuperAdmin'] },
 ];

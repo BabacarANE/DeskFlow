@@ -20,6 +20,7 @@ import {
   UpdateUserRequest,
   User,
 } from '../api/models';
+import { currentMockTheme, handleKbRoutes, resetMockKb } from './mock-kb';
 import { MockResult, handleTicketRoutes, resetMockTickets } from './mock-tickets';
 
 /**
@@ -48,23 +49,12 @@ interface State {
   nextId: number;
 }
 
-/** The demo tenant uses the locked palette, read from tokens.css (no hex outside that file). */
-function defaultTheme(): Theme {
-  const css = getComputedStyle(document.documentElement);
-  const read = (name: string) => css.getPropertyValue(name).trim();
-  return {
-    colorPrimary: read('--color-primary'),
-    colorSurface: read('--color-surface'),
-    colorAccent: read('--color-accent'),
-  };
-}
-
 const DEMO_TENANT = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Démo SAS',
   slug: 'demo',
   get theme(): Theme {
-    return defaultTheme();
+    return currentMockTheme();
   },
 };
 
@@ -158,6 +148,7 @@ let state = seed();
 export function resetMockBackend(): void {
   state = seed();
   resetMockTickets();
+  resetMockKb();
 }
 
 function problem(status: number, title: string, errors?: Record<string, string[]>, type?: string) {
@@ -231,14 +222,15 @@ function handle(
     return role ? ok(ME_BY_ROLE[role]) : problem(401, 'Unauthorized');
   }
 
-  const ticketResult = handleTicketRoutes({
+  const routeContext = {
     me: ME_BY_ROLE[currentRole() ?? 'demandeur'],
     users: state.users,
     method,
     path,
     query,
     body,
-  });
+  };
+  const ticketResult = handleTicketRoutes(routeContext) ?? handleKbRoutes(routeContext);
   if (ticketResult) {
     return currentRole() ? fromResult(ticketResult) : problem(401, 'Unauthorized');
   }
