@@ -72,7 +72,7 @@ public sealed class UpdateSlaPoliciesRequestValidator : AbstractValidator<Update
                 }
                 else if (!seen.Add(priority))
                 {
-                    context.AddFailure($"{key}.priority", "Une seule ligne par priorité.");
+                    context.AddFailure("policies", "Une seule ligne par priorité : Low, Normal, High et Urgent.");
                 }
 
                 var first = InRange(context, $"{key}.firstResponseMinutes", row.FirstResponseMinutes);

@@ -95,7 +95,7 @@ public class SlaPolicyTests(PostgresFixture postgres) : TicketTestBase(postgres)
             (new { }, "policies"),
             (Table(Line("Low", 1, 2), Line("Normal", 1, 2), Line("High", 1, 2)), "policies"),
             (Table(Line("Low", 1, 2), Line("Normal", 1, 2), Line("High", 1, 2), Line("Urgent", 1, 2), Line("Urgent", 1, 2)), "policies"),
-            (Table(Line("Low", 1, 2), Line("Low", 1, 2), Line("High", 1, 2), Line("Urgent", 1, 2)), "policies[1].priority"),
+            (Table(Line("Low", 1, 2), Line("Low", 1, 2), Line("High", 1, 2), Line("Urgent", 1, 2)), "policies"),
             (Table(Line("Low", 1, 2), Line("Normal", 1, 2), Line("High", 1, 2), Line("Critical", 1, 2)), "policies[3].priority"),
             (Table(Line("Low", 0, 2), Line("Normal", 1, 2), Line("High", 1, 2), Line("Urgent", 1, 2)), "policies[0].firstResponseMinutes"),
             (Table(Line("Low", 1, 0), Line("Normal", 1, 2), Line("High", 1, 2), Line("Urgent", 1, 2)), "policies[0].resolutionMinutes"),
