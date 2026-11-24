@@ -124,3 +124,23 @@ describe('ThemeService', () => {
     }
   });
 });
+
+describe('ThemeService.variablesFor', () => {
+  it('returns the five variables without touching :root', () => {
+    const service = TestBed.inject(ThemeService);
+    service.reset();
+    const vars = service.variablesFor({
+      colorPrimary: '#102030',
+      colorSurface: '#FAFAFA',
+      colorAccent: '#FFD400',
+    });
+    expect(vars).toEqual({
+      '--color-primary': '#102030',
+      '--color-surface': '#FAFAFA',
+      '--color-accent': '#FFD400',
+      '--on-primary': 'var(--on-light)',
+      '--on-accent': 'var(--on-dark)',
+    });
+    expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('');
+  });
+});

@@ -6,7 +6,11 @@ const MESSAGES: Record<string, (e: Record<string, unknown>) => string> = {
   required: () => 'Ce champ est obligatoire.',
   email: () => 'Saisissez une adresse e-mail valide.',
   maxlength: (e) => `Ce champ ne peut pas dépasser ${String(e['requiredLength'])} caractères.`,
+  minlength: (e) => `Ce champ doit comporter au moins ${String(e['requiredLength'])} caractères.`,
+  min: (e) => `La valeur minimale est ${String(e['min'])}.`,
+  max: (e) => `La valeur maximale est ${String(e['max'])}.`,
   pattern: () => 'Le format est invalide.',
+  custom: (e) => String(e['message']),
   server: (e) => String(e['message']),
 };
 
@@ -16,12 +20,14 @@ const MESSAGES: Record<string, (e: Record<string, unknown>) => string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (message(); as text) {
-      <p class="mt-1 text-sm font-medium" role="alert">{{ text }}</p>
+      <p class="mt-1 text-sm font-medium" role="alert" [attr.id]="errorId()">{{ text }}</p>
     }
   `,
 })
 export class FieldError {
   readonly control = input.required<AbstractControl>();
+  /** Id of the message, referenced by the field through aria-describedby (see describedBy). */
+  readonly errorId = input<string | null>(null);
 
   /** Bumped on every touched, status or value event of the control, so the OnPush view refreshes. */
   private readonly changes = signal(0);
@@ -57,4 +63,22 @@ export function applyFieldErrors(form: FormGroup, error: ApiError): boolean {
     applied = true;
   }
   return applied;
+}
+
+/** True when a message is displayed for the control (same rule as FieldError). */
+export function showsError(control: AbstractControl): boolean {
+  return !!control.errors && (control.touched || control.dirty);
+}
+
+/**
+ * Value of aria-describedby for a field: the error message (only while it is displayed) and any
+ * permanent hint.
+ */
+export function describedBy(
+  control: AbstractControl,
+  errorId: string,
+  ...hintIds: string[]
+): string | null {
+  const ids = [...hintIds, ...(showsError(control) ? [errorId] : [])];
+  return ids.length > 0 ? ids.join(' ') : null;
 }

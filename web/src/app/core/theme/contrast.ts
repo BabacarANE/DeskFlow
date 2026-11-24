@@ -52,3 +52,31 @@ export function onColorFor(
 export function accentContrastWarning(accent: string, surface: string): boolean {
   return contrastRatio(accent, surface) < 3;
 }
+
+/** Warning shown while editing and mirrored by the API (PUT /theme warnings). */
+export const ACCENT_CONTRAST_WARNING =
+  'Le contraste entre la couleur d’accent et la surface est inférieur à 3:1 : l’accent risque d’être difficile à repérer.';
+
+/** Normalises a valid colour to the "#RRGGBB" upper case form stored by the API. */
+export function normalizeHex(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+/**
+ * Contrast of the text colour chosen by onColorFor on a background. With pure black and white it
+ * is always at least 4.5:1 (about 4.58:1 at worst); with the real dark text colour of tokens.css
+ * the mid-tones can fall below, which the theme screen reports as a warning.
+ */
+export function chosenTextContrast(
+  background: string,
+  darkLuminance = 0,
+  lightLuminance = 1,
+): number {
+  const textLuminance =
+    onColorFor(background, darkLuminance, lightLuminance) === 'dark'
+      ? darkLuminance
+      : lightLuminance;
+  return contrastWithLuminance(background, textLuminance);
+}
+
+export const MIN_TEXT_CONTRAST = 4.5;

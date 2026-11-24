@@ -4,6 +4,10 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AccessToken,
+  Article,
+  ArticleQuery,
+  ArticleSummary,
+  ArticleRequest,
   Category,
   Comment,
   CreateCommentRequest,
@@ -15,11 +19,15 @@ import {
   Me,
   Page,
   Provider,
+  SlaPolicy,
   Tenant,
+  Theme,
+  ThemeUpdateResult,
   TicketDetail,
   TicketEvent,
   TicketQuery,
   TicketSummary,
+  UpdateSlaPoliciesRequest,
   UpdateTicketRequest,
   UpdateTenantRequest,
   UpdateUserRequest,
@@ -29,7 +37,7 @@ import {
 
 export const API_BASE = '/api/v1';
 
-/** Typed client for the phase 1 and 2 contract (docs/api/openapi.json). */
+/** Typed client for the phases 1 to 4 contract (docs/api/openapi.json). */
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   private readonly http = inject(HttpClient);
@@ -95,6 +103,67 @@ export class ApiClient {
 
   listCategories(): Observable<Category[]> {
     return this.http.get<Category[]>(`${API_BASE}/categories`);
+  }
+
+  createCategory(name: string): Observable<Category> {
+    return this.http.post<Category>(`${API_BASE}/categories`, { name });
+  }
+
+  renameCategory(id: string, name: string): Observable<Category> {
+    return this.http.put<Category>(`${API_BASE}/categories/${id}`, { name });
+  }
+
+  deleteCategory(id: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/categories/${id}`);
+  }
+
+  listArticles(query: ArticleQuery = {}): Observable<Page<ArticleSummary>> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') params = params.set(key, value);
+    }
+    return this.http.get<Page<ArticleSummary>>(`${API_BASE}/articles`, { params });
+  }
+
+  getArticle(id: string): Observable<Article> {
+    return this.http.get<Article>(`${API_BASE}/articles/${id}`);
+  }
+
+  createArticle(body: ArticleRequest): Observable<Article> {
+    return this.http.post<Article>(`${API_BASE}/articles`, body);
+  }
+
+  updateArticle(id: string, body: ArticleRequest): Observable<Article> {
+    return this.http.put<Article>(`${API_BASE}/articles/${id}`, body);
+  }
+
+  publishArticle(id: string): Observable<Article> {
+    return this.http.post<Article>(`${API_BASE}/articles/${id}/publish`, null);
+  }
+
+  unpublishArticle(id: string): Observable<Article> {
+    return this.http.post<Article>(`${API_BASE}/articles/${id}/unpublish`, null);
+  }
+
+  getTheme(): Observable<Theme> {
+    return this.http.get<Theme>(`${API_BASE}/theme`);
+  }
+
+  updateTheme(body: Theme): Observable<ThemeUpdateResult> {
+    return this.http.put<ThemeUpdateResult>(`${API_BASE}/theme`, body);
+  }
+
+  /** Back to the default palette; the API returns it. */
+  resetTheme(): Observable<Theme> {
+    return this.http.delete<Theme>(`${API_BASE}/theme`);
+  }
+
+  listSlaPolicies(): Observable<SlaPolicy[]> {
+    return this.http.get<SlaPolicy[]>(`${API_BASE}/sla-policies`);
+  }
+
+  updateSlaPolicies(body: UpdateSlaPoliciesRequest): Observable<SlaPolicy[]> {
+    return this.http.put<SlaPolicy[]>(`${API_BASE}/sla-policies`, body);
   }
 
   listAssignees(): Observable<UserRef[]> {

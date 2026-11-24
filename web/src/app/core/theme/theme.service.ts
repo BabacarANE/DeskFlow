@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Theme } from '../api/models';
-import { isHexColor, luminance, onColorFor } from './contrast';
+import { chosenTextContrast, isHexColor, luminance, onColorFor } from './contrast';
 
 const MANAGED_PROPERTIES = [
   '--color-primary',
@@ -28,11 +28,32 @@ export class ThemeService {
       return;
     }
     const style = this.root.style;
-    style.setProperty('--color-primary', theme.colorPrimary);
-    style.setProperty('--color-surface', theme.colorSurface);
-    style.setProperty('--color-accent', theme.colorAccent);
-    style.setProperty('--on-primary', this.onVariable(theme.colorPrimary));
-    style.setProperty('--on-accent', this.onVariable(theme.colorAccent));
+    for (const [name, value] of Object.entries(this.variablesFor(theme))) {
+      style.setProperty(name, value);
+    }
+  }
+
+  /**
+   * The five managed variables for a valid theme. Also used by the theme preview, which writes
+   * them on its own container instead of :root.
+   */
+  variablesFor(theme: Theme): Record<string, string> {
+    return {
+      '--color-primary': theme.colorPrimary,
+      '--color-surface': theme.colorSurface,
+      '--color-accent': theme.colorAccent,
+      '--on-primary': this.onVariable(theme.colorPrimary),
+      '--on-accent': this.onVariable(theme.colorAccent),
+    };
+  }
+
+  /** Contrast of the text colour (--on-dark or --on-light) that `--on-*` would use on a background. */
+  textContrast(background: string): number {
+    return chosenTextContrast(
+      background,
+      this.luminanceOf('--on-dark', 0),
+      this.luminanceOf('--on-light', 1),
+    );
   }
 
   reset(): void {

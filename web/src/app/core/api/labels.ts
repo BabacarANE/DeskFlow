@@ -1,4 +1,5 @@
 import {
+  ArticleStatus,
   AssignableRole,
   DemoRole,
   InvitationStatus,
@@ -62,4 +63,9 @@ export const EVENT_LABELS: Record<TicketEventType, string> = {
   PriorityChanged: 'Priorité modifiée',
   AssigneeChanged: 'Assignation modifiée',
   CategoryChanged: 'Catégorie modifiée',
+};
+
+export const ARTICLE_STATUS_LABELS: Record<ArticleStatus, string> = {
+  Draft: 'Brouillon',
+  Published: 'Publié',
 };
