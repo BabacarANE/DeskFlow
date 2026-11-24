@@ -129,8 +129,8 @@ namespace Desk.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Solution")
                         .IsRequired()
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
                     b.Property<Guid?>("SourceTicketId")
                         .HasColumnType("uuid");
@@ -168,6 +168,8 @@ namespace Desk.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("TenantId", "Status");
+
+                    b.HasIndex("TenantId", "Status", "PublishedAt");
 
                     b.ToTable("KnowledgeArticles");
                 });

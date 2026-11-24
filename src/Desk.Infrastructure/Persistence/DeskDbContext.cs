@@ -146,12 +146,14 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
             e.Property(x => x.Title).HasMaxLength(200);
             e.Property(x => x.Symptom).HasMaxLength(5000);
             e.Property(x => x.Cause).HasMaxLength(5000);
-            e.Property(x => x.Solution).HasMaxLength(5000);
+            // 8000 since phase 4 (contract: solution up to 8000 characters).
+            e.Property(x => x.Solution).HasMaxLength(8000);
             e.Property(x => x.Tags).HasMaxLength(500);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             // One draft per resolved ticket: the database refuses a duplicate even if two consumers race.
             e.HasIndex(x => new { x.TenantId, x.SourceTicketId }).IsUnique();
             e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasIndex(x => new { x.TenantId, x.Status, x.PublishedAt });
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Ticket>().WithMany().HasForeignKey(x => x.SourceTicketId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);

@@ -95,6 +95,38 @@ public class OpenApiContractTests(PostgresFixture postgres) : ApiTestBase(postgr
         }
     }
 
+    [Fact]
+    public async Task FrozenContract_CoversThePhaseFourOperations_AndTheApiExposesThemBehindAuthorization()
+    {
+        using var contract = JsonDocument.Parse(await File.ReadAllTextAsync(FindContractFile()));
+        string[] phaseFour =
+        [
+            "GET /api/v1/articles", "POST /api/v1/articles", "GET /api/v1/articles/{id}", "PUT /api/v1/articles/{id}",
+            "POST /api/v1/articles/{id}/publish", "POST /api/v1/articles/{id}/unpublish",
+            "GET /api/v1/theme", "PUT /api/v1/theme", "DELETE /api/v1/theme",
+            "GET /api/v1/sla-policies", "PUT /api/v1/sla-policies",
+        ];
+        var operations = Operations(contract.RootElement, "/api/v1");
+        var response = await Http.GetAsync("/openapi/v1.json");
+        using var exposed = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var exposedOperations = Operations(exposed.RootElement, "");
+
+        foreach (var operation in phaseFour)
+        {
+            Assert.Contains(operation, operations);
+            Assert.Contains(operation, exposedOperations);
+        }
+
+        // Every route of these three families demands a signed-in user (the roles are covered by their own tests).
+        var protectedRoutes = Factory.Services.GetServices<Microsoft.AspNetCore.Routing.EndpointDataSource>()
+            .SelectMany(s => s.Endpoints).OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .Where(e => new[] { "/api/v1/articles", "/api/v1/theme", "/api/v1/sla-policies" }
+                .Any(prefix => e.RoutePattern.RawText!.StartsWith(prefix, StringComparison.Ordinal)))
+            .ToList();
+        Assert.Equal(phaseFour.Length, protectedRoutes.Sum(e => e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()!.HttpMethods.Count));
+        Assert.All(protectedRoutes, e => Assert.NotEmpty(e.Metadata.GetOrderedMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>()));
+    }
+
     private static string Normalize(string pattern) =>
         System.Text.RegularExpressions.Regex.Replace(pattern, @"\{(\w+):\w+\}", "{$1}").TrimEnd('/');
 }
