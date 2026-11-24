@@ -20,6 +20,8 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketEvent> TicketEvents => Set<TicketEvent>();
     public DbSet<TicketCounter> TicketCounters => Set<TicketCounter>();
+    public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
+    public DbSet<SlaBreach> SlaBreaches => Set<SlaBreach>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
 
@@ -136,6 +138,33 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
             e.HasIndex(x => new { x.TicketId, x.At });
             e.HasOne<Ticket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasQueryFilter(x => CurrentTenantId != null && x.TenantId == CurrentTenantId);
+        });
+
+        b.Entity<KnowledgeArticle>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.Symptom).HasMaxLength(5000);
+            e.Property(x => x.Cause).HasMaxLength(5000);
+            e.Property(x => x.Solution).HasMaxLength(5000);
+            e.Property(x => x.Tags).HasMaxLength(500);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            // One draft per resolved ticket: the database refuses a duplicate even if two consumers race.
+            e.HasIndex(x => new { x.TenantId, x.SourceTicketId }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Ticket>().WithMany().HasForeignKey(x => x.SourceTicketId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasQueryFilter(x => CurrentTenantId != null && x.TenantId == CurrentTenantId);
+        });
+
+        b.Entity<SlaBreach>(e =>
+        {
+            e.HasKey(x => new { x.TicketId, x.Kind });
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.HasIndex(x => x.TenantId);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Ticket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
             e.HasQueryFilter(x => CurrentTenantId != null && x.TenantId == CurrentTenantId);
         });
 

@@ -40,3 +40,9 @@ public enum TicketEventType
     AssigneeChanged,
     CategoryChanged,
 }
+
+public enum ArticleStatus
+{
+    Draft,
+    Published,
+}
