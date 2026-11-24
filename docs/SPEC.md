@@ -226,7 +226,7 @@ Cinq événements couvrent tout le MVP ; ils transitent par un exchange topic, c
 
 - Exchange `desk.events` (topic, durable) ; la routing key est le nom de l'événement.
 - Une file durable `desk.<consommateur>` par consommateur, liée à `desk.events`.
-- Exchange `desk.retry` et files de délai `desk.<consommateur>.retry` (TTL) qui renvoient le message vers la file d'origine par dead-lettering.
+- Exchange `desk.retry` et une file de délai (TTL) par consommateur et par palier, `desk.<consommateur>.retry.<délai>` (`5s`, `30s`, `2m`), qui renvoient le message vers la file d'origine par dead-lettering (une file par palier évite le blocage en tête de file ; voir ADR 008).
 - Exchange `desk.dlx` et file `desk.dlq` pour les messages abandonnés.
 - Messages JSON persistants, avec les en-têtes `message-id`, `correlation-id`, `tenant-id` et `attempt`.
 - Publication avec publisher confirms ; consommation avec ack manuel et prefetch de 10.
@@ -245,7 +245,7 @@ Cinq événements couvrent tout le MVP ; ils transitent par un exchange topic, c
 
 1. **Outbox** : le message est écrit dans la transaction métier ; un dispatcher le publie (polling toutes les secondes, `FOR UPDATE SKIP LOCKED`). Garantie : au moins une fois.
 2. **Idempotence** : chaque consommateur enregistre `(MessageId, Consumer)` dans `ProcessedMessage` et ignore un doublon.
-3. **Retries** : 3 tentatives (délais de 5 s, 30 s puis 2 min), puis envoi en `desk.dlq`.
+3. **Retries** : 3 nouvelles tentatives après la première livraison (délais de 5 s, 30 s puis 2 min, soit 4 livraisons au total), puis envoi en `desk.dlq` avec les en-têtes d'échec `x-*` (ADR 008).
 4. **Message empoisonné** (JSON invalide) : envoyé directement en `desk.dlq`, sans nouvelle tentative.
 5. **Rejeu** : une commande du Worker `replay-dlq` republie les messages de la DLQ vers leur exchange d'origine ; le runbook `docs/runbooks/dlq.md` explique comment inspecter la file dans l'interface de management (port 15672).
 6. **Démonstration** : un réglage `Messaging:FailConsumer=<nom>` force un consommateur à échouer, pour montrer retries et DLQ en direct et pour les tests.

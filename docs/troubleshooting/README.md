@@ -13,3 +13,9 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [007](007-ef-insert-order-same-table.md) | L'ordre des événements créés dans une même opération n'est pas celui de l'ajout | API |
 | [008](008-json-converter-skip-partial.md) | Un identifiant mal formé dans un PATCH répond 500 (`Utf8JsonReader.Skip`) | API |
 | [009](009-pagination-int-overflow.md) | `GET /tickets?page=2147483647` répond 500 (débordement d'offset) | API |
+| [010](010-replay-dlq-infinite-loop.md) | `replay-dlq` boucle sans fin sur un message qui échoue toujours | Worker |
+| [011](011-testcontainers-rabbitmq-management.md) | Testcontainers RabbitMQ : l'API de management est inutilisable par défaut | Tests |
+| [012](012-topology-declared-late.md) | Erreur `404 no exchange 'desk.dlx'` juste après le démarrage de l'hôte | Worker |
+| [013](013-unroutable-event-marked-sent.md) | Un événement non routable était marqué comme envoyé | Worker |
+| [014](014-consumers-dead-after-connection-loss.md) | Les consommateurs restaient morts après une coupure de connexion | Worker |
+| [015](015-outbox-invalid-row-blocks-dispatcher.md) | Une ligne d'outbox invalide bloquait le dispatcher | Worker |

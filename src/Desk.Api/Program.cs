@@ -6,6 +6,7 @@ using Desk.Api.Endpoints;
 using Desk.Api.Http;
 using Desk.Infrastructure;
 using Desk.Infrastructure.Bootstrap;
+using Desk.Infrastructure.Messaging;
 using FluentValidation;
 using Serilog;
 
@@ -18,6 +19,9 @@ builder.Host.UseSerilog((context, config) => config
 builder.Services.AddDeskHealthChecks(builder.Configuration);
 builder.Services.AddDeskIdentity(builder.Configuration, builder.Environment.IsProduction());
 builder.Services.AddDeskAuthentication(builder.Configuration);
+// Outbox writer and publisher; the topology is declared in the background (a broker that is down must not stop the API).
+builder.Services.AddDeskMessaging(builder.Configuration);
+builder.Services.AddDeskTopologyStartup();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddValidatorsFromAssemblyContaining<CreateTenantRequestValidator>();
@@ -60,6 +64,7 @@ if (DatabaseInitializer.ShouldRun(app.Configuration, app.Environment.IsDevelopme
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseCors();
 app.UseRateLimiter();

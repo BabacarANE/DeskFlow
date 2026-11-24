@@ -19,19 +19,26 @@ public sealed class SmtpOptions
 public interface IEmailSender
 {
     Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default);
+
+    /// <summary>Multipart message: plain text plus HTML. Implementations that cannot send HTML fall back to the text.</summary>
+    Task SendAsync(string to, string subject, string textBody, string? htmlBody, CancellationToken ct = default) =>
+        SendAsync(to, subject, textBody, ct);
 }
 
 /// <summary>SMTP through MailKit: Mailpit in development, any SMTP server in production.</summary>
 public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
-    public async Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default)
+    public Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default) =>
+        SendAsync(to, subject, textBody, null, ct);
+
+    public async Task SendAsync(string to, string subject, string textBody, string? htmlBody, CancellationToken ct = default)
     {
         var smtp = options.Value;
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(smtp.From));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = textBody };
+        message.Body = new BodyBuilder { TextBody = textBody, HtmlBody = htmlBody }.ToMessageBody();
 
         using var client = new SmtpClient();
         await client.ConnectAsync(smtp.Host, smtp.Port, smtp.UseTls ? SecureSocketOptions.StartTls : SecureSocketOptions.None, ct);

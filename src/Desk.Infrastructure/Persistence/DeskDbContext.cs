@@ -143,6 +143,7 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
         {
             e.Property(x => x.Type).HasMaxLength(100);
             e.Property(x => x.Payload).HasColumnType("jsonb");
+            e.Property(x => x.FailureReason).HasMaxLength(500);
             e.HasIndex(x => x.CreatedAt).HasFilter("\"DispatchedAt\" IS NULL");
         });
 

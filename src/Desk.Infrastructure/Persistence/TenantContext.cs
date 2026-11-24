@@ -9,14 +9,20 @@ namespace Desk.Infrastructure.Persistence;
 public sealed class TenantContext(IHttpContextAccessor? accessor = null) : ITenantContext
 {
     private int _unscoped;
+    private Guid? _explicitTenant;
     private ClaimsPrincipal? Principal => accessor?.HttpContext?.User;
 
     public Guid? TenantId =>
-        Guid.TryParse(Principal?.FindFirstValue("tid"), out var id) ? id : null;
+        _explicitTenant ?? (Guid.TryParse(Principal?.FindFirstValue("tid"), out var id) ? id : null);
 
     public bool IsSuperAdmin => Principal?.FindFirstValue("role") == nameof(Role.SuperAdmin);
 
     public bool IsUnscoped => Volatile.Read(ref _unscoped) > 0;
+
+    /// <summary>
+    /// Sets the tenant of a message consumer (no HTTP principal in the Worker). Call once per scope, before any data access.
+    /// </summary>
+    public void UseTenant(Guid tenantId) => _explicitTenant = tenantId;
 
     public IDisposable BeginUnscoped()
     {

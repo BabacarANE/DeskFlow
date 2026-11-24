@@ -97,6 +97,11 @@ public class OutboxMessage
     public string Payload { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? DispatchedAt { get; set; }
+
+    /// <summary>Set when the row can never be published (invalid envelope): the dispatcher skips it for good.</summary>
+    public DateTimeOffset? FailedAt { get; set; }
+
+    public string? FailureReason { get; set; }
 }
 
 public class ProcessedMessage

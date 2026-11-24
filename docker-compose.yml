@@ -82,10 +82,20 @@ services:
       context: .
       dockerfile: docker/dotnet.Dockerfile
       args: { PROJECT: Desk.Worker }
-    environment: *dotnet-env
+    environment:
+      <<: *dotnet-env
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__UseTls: "false"
+      Smtp__From: ${SMTP_FROM:-DeskFlow <no-reply@deskflow.local>}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      # Demo: name a consumer (e.g. email-ack) to force retries then the DLQ. Empty = off.
+      Messaging__FailConsumer: ${MESSAGING_FAIL_CONSUMER:-}
     depends_on:
+      mailpit: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      api: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/ready"]
       interval: 10s
