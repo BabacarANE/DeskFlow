@@ -12,3 +12,9 @@ Un middleware (`NulCharacterGuard`) placé après l'autorisation vérifie la que
 
 ## Pour l'éviter
 Test `A_NUL_character_in_any_text_input_is_a_422_…` sur une famille de routes ; toute nouvelle route passe par le middleware.
+
+## Problèmes trouvés en corrigeant (réaudit)
+- Le garde lui-même répondait 500 sur de l'UTF-8 invalide : `Utf8JsonReader.GetString()` lève `InvalidOperationException`, et seule `JsonException` était attrapée.
+- Indépendamment du garde, le binder du framework répondait déjà 500 sur un corps en UTF-8 invalide et sur un JSON de 200 niveaux : le garde répond maintenant 400.
+- Le 413 ne fonctionnait pas : le dépassement du tampon lève `IOException`, pas `InvalidDataException` ; les deux sont attrapées et `Content-Length` est contrôlé avant. Le chemin « corps chunked sans `Content-Length` » n'est pas testé.
+- Hors périmètre du garde : en-têtes, cookies et paramètres de chemin (Kestrel rejette les en-têtes invalides, les identifiants de chemin sont des Guid).
