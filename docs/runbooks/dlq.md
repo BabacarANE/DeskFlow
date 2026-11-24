@@ -60,7 +60,7 @@ docker compose exec worker dotnet Desk.Worker.dll replay-dlq
 
 ## 6. Pannes du broker
 
-- Un événement qu'aucune file ne reçoit reste en attente dans l'outbox (jamais marqué envoyé) ; un avertissement « is unroutable » est journalisé.
+- Un événement qu'aucune file ne reçoit reste en attente dans l'outbox (jamais marqué envoyé) ; un avertissement « is unroutable » est journalisé (une fois par ligne côté dispatcher).
 - Après une coupure ou un redémarrage de RabbitMQ, le Worker se reconnecte et se réabonne seul ; `/health/ready` du Worker contient un contrôle « consumers ».
 - À l'arrêt, le Worker attend ses traitements en cours (`Messaging:ShutdownTimeout`, 15 s par défaut) puis remet les autres messages en file.
 - Une ligne d'outbox à enveloppe invalide est marquée en échec (`OutboxMessages.FailedAt`, `FailureReason`) et ignorée ensuite.

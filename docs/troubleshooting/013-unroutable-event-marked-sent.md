@@ -11,7 +11,7 @@ Avec les confirmations de publication, le broker confirme un message même s'il 
 Publication avec `Mandatory=false`. Avec `Mandatory=true`, `RabbitMQ.Client` ne renvoie pas `false` : il lève `PublishReturnException` (312 NO_ROUTE), ce qu'un premier test a révélé par un délai dépassé.
 
 ## Solution
-Événements publiés avec `Mandatory=true` ; le publisher attrape `PublishReturnException` et renvoie `false` ; la ligne reste en attente et un avertissement « is unroutable » est journalisé une seule fois.
+Événements publiés avec `Mandatory=true` ; le publisher attrape `PublishReturnException` et renvoie `false` ; la ligne reste en attente et le dispatcher journalise un avertissement « is unroutable » une seule fois par ligne (le publisher en ajoute à chaque tentative ; mineur restant).
 
 ## Pour l'éviter
 Tests de `MessagingFailureTests` (événement non routable, échec de publication).
