@@ -48,3 +48,9 @@ Aucun changement de contrat : `GET/POST/PUT/DELETE /categories` existent depuis 
 - `/tickets/new` : suggestions d'articles sous le titre (voir plus haut).
 - `/admin` : onglets Catégories, SLA, Thème (en plus d'utilisateurs et invitations existants). Thème : trois sélecteurs de couleur, consigne « Choisissez deux couleurs discrètes et une couleur qui claque. », aperçu en direct (mini liste de tickets et un bouton), bouton « Réinitialiser », avertissements affichés ; après enregistrement, le thème s'applique immédiatement (variables CSS sur `:root`).
 - Navigation : entrée « Base de connaissances » pour tous les rôles connectés avec une entreprise.
+
+## 6. Précisions de l'implémentation
+- La recherche ne replie pas les accents (`ILIKE` en locale C ; l'extension `unaccent` n'est pas garantie) : « imprimante » ne trouve pas « imprimanté ». Elle ignore la casse.
+- `solution` accepte 8 000 caractères (migration `ArticleSearchAndSolutionLength` : colonne portée de 5 000 à 8 000, index `(TenantId, Status, PublishedAt)`).
+- Un `q` de plus de 100 caractères, un `status` inconnu ou une pagination invalide donnent 422, comme sur les tickets.
+- Tri : titre contenant tous les mots d'abord, puis articles publiés avant brouillons, puis `PublishedAt` décroissant.
