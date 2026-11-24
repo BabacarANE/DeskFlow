@@ -88,6 +88,9 @@ app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapCategoryEndpoints();
 app.MapTicketEndpoints();
+app.MapArticleEndpoints();
+app.MapThemeEndpoints();
+app.MapSlaEndpoints();
 // Close the connection when its JWT expires: the client reconnects with a renewed token (it never outlives its credentials).
 app.MapHub<NotificationsHub>(NotificationsHub.Path, o => o.CloseOnAuthenticationExpiration = true);
 
