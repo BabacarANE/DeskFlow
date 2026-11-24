@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "DeskFlow API",
-    "version": "0.2.0-phase2",
+    "version": "0.3.0-phase4",
     "description": "Contrat des phases 1 (identité, multi-entreprise) et 2 (tickets), SPEC sections 4, 5, 6, 9. Gelé par l'orchestrateur : tout changement passe par lui. Enums en chaînes, JSON camelCase, erreurs ProblemDetails (RFC 7807), validation 422, ressource d'une autre entreprise = 404."
   },
   "servers": [
@@ -34,6 +34,15 @@
     },
     {
       "name": "assignees"
+    },
+    {
+      "name": "articles"
+    },
+    {
+      "name": "theme"
+    },
+    {
+      "name": "sla"
     }
   ],
   "paths": {
@@ -1108,6 +1117,460 @@
           }
         }
       }
+    },
+    "/articles": {
+      "get": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "listArticles",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recherche simple dans les articles. Requester : articles publiés seulement. Agent et TenantAdmin : tous, filtrables par status. Sert aussi aux suggestions à la saisie (q = titre en cours, pageSize = 5)",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Mots séparés par des espaces ; tous doivent apparaître (insensible à la casse) dans le titre, le symptôme, la cause, la solution ou les étiquettes ; mots de moins de 2 caractères ignorés ; les correspondances dans le titre passent d'abord, puis PublishedAt décroissant"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ArticleStatus"
+            },
+            "description": "Ignoré pour un Requester (toujours Published)"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticlePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "createArticle",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Agent ou TenantAdmin : crée un article au statut Draft",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Article"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/articles/{id}": {
+      "get": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "getArticle",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lecture ; un brouillon est 404 pour un Requester, comme un article d'une autre entreprise",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Article",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Article"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "updateArticle",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Agent ou TenantAdmin : modifie un article (le statut ne change pas) ; dernier enregistrement gagnant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mis à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Article"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/articles/{id}/publish": {
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "publishArticle",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Agent ou TenantAdmin : publie (Draft vers Published, PublishedAt posé) ; idempotent si déjà publié ; 422 si le titre, le symptôme ou la solution est vide",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publié",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Article"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/articles/{id}/unpublish": {
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "unpublishArticle",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Agent ou TenantAdmin : repasse en Draft (PublishedAt effacé) ; idempotent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dépublié",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Article"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/theme": {
+      "get": {
+        "tags": [
+          "theme"
+        ],
+        "operationId": "getTheme",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Couleurs de l'entreprise (tout utilisateur connecté)",
+        "responses": {
+          "200": {
+            "description": "Thème",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Theme"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "theme"
+        ],
+        "operationId": "updateTheme",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "TenantAdmin : remplace les trois couleurs (format #RRGGBB, 422 sinon) ; renvoie des avertissements non bloquants (accent à moins de 3:1 de contraste avec la surface)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Theme"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thème enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeUpdateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "theme"
+        ],
+        "operationId": "resetTheme",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "TenantAdmin : réinitialise la palette par défaut et la renvoie",
+        "responses": {
+          "200": {
+            "description": "Thème par défaut",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Theme"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/sla-policies": {
+      "get": {
+        "tags": [
+          "sla"
+        ],
+        "operationId": "listSlaPolicies",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "TenantAdmin : les quatre SLA de l'entreprise, ordre Low, Normal, High, Urgent",
+        "responses": {
+          "200": {
+            "description": "Liste",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SlaPolicy"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "sla"
+        ],
+        "operationId": "updateSlaPolicies",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "TenantAdmin : remplace les quatre SLA ; ne s'applique qu'aux tickets créés ensuite (les échéances existantes ne sont pas recalculées)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSlaPoliciesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SlaPolicy"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1948,6 +2411,248 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ArticleStatus": {
+        "type": "string",
+        "enum": [
+          "Draft",
+          "Published"
+        ]
+      },
+      "ArticleSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "tags",
+          "excerpt",
+          "createdAt",
+          "publishedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ArticleStatus"
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "description": "Étiquettes, sans virgule ; stockées séparées par des virgules"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Début du symptôme (200 caractères au plus)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Article": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "symptom",
+          "cause",
+          "solution",
+          "tags",
+          "status",
+          "sourceTicketId",
+          "author",
+          "createdAt",
+          "publishedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "symptom": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "solution": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "description": "Étiquettes, sans virgule ; stockées séparées par des virgules"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ArticleStatus"
+          },
+          "sourceTicketId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "ArticlePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticleSummary"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          }
+        }
+      },
+      "ArticleRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "symptom",
+          "cause",
+          "solution",
+          "tags"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "symptom": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "cause": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "solution": {
+            "type": "string",
+            "maxLength": 8000
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "description": "Étiquettes, sans virgule ; stockées séparées par des virgules"
+          }
+        }
+      },
+      "ThemeUpdateResult": {
+        "type": "object",
+        "required": [
+          "theme",
+          "warnings"
+        ],
+        "properties": {
+          "theme": {
+            "$ref": "#/components/schemas/Theme"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Avertissements non bloquants en français (ex. contraste de l'accent avec la surface inférieur à 3:1)"
+          }
+        }
+      },
+      "SlaPolicy": {
+        "type": "object",
+        "required": [
+          "priority",
+          "firstResponseMinutes",
+          "resolutionMinutes"
+        ],
+        "properties": {
+          "priority": {
+            "$ref": "#/components/schemas/TicketPriority"
+          },
+          "firstResponseMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 43200
+          },
+          "resolutionMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 43200
+          }
+        }
+      },
+      "UpdateSlaPoliciesRequest": {
+        "type": "object",
+        "required": [
+          "policies"
+        ],
+        "properties": {
+          "policies": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/SlaPolicy"
+            },
+            "description": "Exactement une ligne par priorité (Low, Normal, High, Urgent) ; resolutionMinutes >= firstResponseMinutes"
           }
         }
       }
