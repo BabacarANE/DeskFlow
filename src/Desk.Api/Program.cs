@@ -4,9 +4,11 @@ using Desk.Api.Auth;
 using Desk.Api.Contracts;
 using Desk.Api.Endpoints;
 using Desk.Api.Http;
+using Desk.Api.Realtime;
 using Desk.Infrastructure;
 using Desk.Infrastructure.Bootstrap;
 using Desk.Infrastructure.Messaging;
+using Desk.Infrastructure.Messaging.Consumers;
 using FluentValidation;
 using Serilog;
 
@@ -22,6 +24,12 @@ builder.Services.AddDeskAuthentication(builder.Configuration);
 // Outbox writer and publisher; the topology is declared in the background (a broker that is down must not stop the API).
 builder.Services.AddDeskMessaging(builder.Configuration);
 builder.Services.AddDeskTopologyStartup();
+
+// Real time: the SignalR hub and the consumer that feeds it. A broker that is down does not stop the API: the consumer
+// keeps trying to subscribe in the background, and REST stays the source of truth.
+builder.Services.AddSignalR(o => o.EnableDetailedErrors = false);
+builder.Services.AddSingleton<IRealtimeNotifier, SignalRRealtimeNotifier>();
+builder.Services.AddDeskConsumers(ConsumerHost.Api);
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddValidatorsFromAssemblyContaining<CreateTenantRequestValidator>();
@@ -80,6 +88,8 @@ app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapCategoryEndpoints();
 app.MapTicketEndpoints();
+// Close the connection when its JWT expires: the client reconnects with a renewed token (it never outlives its credentials).
+app.MapHub<NotificationsHub>(NotificationsHub.Path, o => o.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

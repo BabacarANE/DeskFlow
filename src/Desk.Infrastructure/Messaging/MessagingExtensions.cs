@@ -1,3 +1,4 @@
+using Desk.Infrastructure.Sla;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -42,6 +43,11 @@ public static class MessagingExtensions
         services.AddScoped(consumerType);
         services.AddSingleton(definition);
         EnsureConsumerHost(services);
+        if (definition.Host == ConsumerHost.Worker)
+        {
+            EnsureReadinessCheck(services);
+        }
+
         return services;
     }
 
@@ -73,6 +79,7 @@ public static class MessagingExtensions
         services.AddDeskTopologyStartup();
         services.AddDeskConsumers(ConsumerHost.Worker);
         services.AddDeskOutboxDispatcher();
+        services.AddDeskSlaWatcher(configuration);
         return services;
     }
 
@@ -93,8 +100,21 @@ public static class MessagingExtensions
 
         services.AddSingleton<ConsumerReadiness>();
         services.AddSingleton<MessageProcessor>();
-        services.AddSingleton<ConsumersHealthCheck>();
         services.AddHostedService<ConsumerHostedService>();
+    }
+
+    /// <summary>
+    /// Worker only: its readiness includes "every consumer is subscribed". The API hosts the real-time consumer too, but a
+    /// lost subscription there must not take the API out of rotation: REST stays the source of truth.
+    /// </summary>
+    private static void EnsureReadinessCheck(IServiceCollection services)
+    {
+        if (services.Any(d => d.ServiceType == typeof(ConsumersHealthCheck)))
+        {
+            return;
+        }
+
+        services.AddSingleton<ConsumersHealthCheck>();
         services.AddHealthChecks().AddCheck<ConsumersHealthCheck>("consumers", tags: [HealthChecksExtensions.ReadyTag]);
     }
 }

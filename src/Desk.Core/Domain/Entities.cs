@@ -110,3 +110,40 @@ public class ProcessedMessage
     public string Consumer { get; set; } = "";
     public DateTimeOffset ProcessedAt { get; set; }
 }
+
+/// <summary>Knowledge base article (Symptom / Cause / Solution). A draft proposed from a resolved ticket is unique per ticket.</summary>
+public class KnowledgeArticle
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Title { get; set; } = "";
+    public string Symptom { get; set; } = "";
+    public string Cause { get; set; } = "";
+    public string Solution { get; set; } = "";
+
+    /// <summary>Comma-separated tags, empty for a generated draft.</summary>
+    public string Tags { get; set; } = "";
+    public ArticleStatus Status { get; set; } = ArticleStatus.Draft;
+
+    /// <summary>The resolved ticket this draft comes from; unique per tenant when set.</summary>
+    public Guid? SourceTicketId { get; set; }
+    public Guid AuthorId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? PublishedAt { get; set; }
+}
+
+/// <summary>
+/// Persistent marker "ticket.sla.breached already emitted for this ticket and kind" (<c>response</c> or <c>resolution</c>).
+/// Its primary key is what makes the SlaWatcher emit once, whatever the number of cycles or instances.
+/// </summary>
+public class SlaBreach
+{
+    public Guid TicketId { get; set; }
+    public string Kind { get; set; } = "";
+    public Guid TenantId { get; set; }
+    public DateTimeOffset DueAt { get; set; }
+    public DateTimeOffset DetectedAt { get; set; }
+
+    public const string ResponseKind = "response";
+    public const string ResolutionKind = "resolution";
+}

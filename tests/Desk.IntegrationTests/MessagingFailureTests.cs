@@ -142,8 +142,9 @@ public class MessagingFailureTests(PostgresFixture postgres, RabbitMqFixture rab
         await using var worker = await StartWorkerAsync();
         var readiness = worker.Services.GetRequiredService<ConsumerReadiness>();
 
+        var hosted = worker.Services.GetServices<ConsumerDefinition>().Count(); // all the Worker's consumers share the one connection
         Assert.Equal(1, await Broker.CloseConnectionsAsync("deskflow-consumer"));
-        await Poll.UntilAsync(() => readiness.NotSubscribed.Count == 1, "readiness reports the lost consumer", 10);
+        await Poll.UntilAsync(() => readiness.NotSubscribed.Count == hosted, "readiness reports the lost consumers", 10);
         await Poll.UntilAsync(() => readiness.NotSubscribed.Count == 0, "consumer subscribed again", 30);
 
         await PublishAsync(TicketCreated(ticket));

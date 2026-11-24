@@ -54,12 +54,12 @@ Retries, dead-letter queue et idempotence : SPEC section 8 (3 tentatives à 5 s,
 - **`AssignmentNotifierConsumer`** : e-mail à l'assigné.
 - **`CommentNotifierConsumer`** : e-mail à l'autre partie (le demandeur si l'auteur est un agent, l'assigné si l'auteur est le demandeur ; rien s'il n'y a pas d'assigné).
 - **`KbDraftConsumer`** : crée un `KnowledgeArticle` au statut `Draft`, `SourceTicketId` = le ticket : titre = titre du ticket, `Symptom` = description, `Solution` = dernier commentaire public (vide s'il n'y en a pas), `Cause` vide, `AuthorId` = l'assigné (ou le demandeur à défaut). Un seul brouillon par ticket (idempotent même après réouverture puis nouvelle résolution : un brouillon existant n'est pas dupliqué).
-- **`EscalationConsumer`** : relève la priorité d'un cran (`Urgent` reste `Urgent`), renseigne `EscalatedAt`, ajoute un `TicketEvent` (`PriorityChanged`, acteur nul), recalcule les échéances SLA, e-mail aux TenantAdmin de l'entreprise. Idempotent grâce à `EscalatedAt` : un ticket n'est escaladé qu'une fois.
+- **`EscalationConsumer`** : relève la priorité d'un cran (`Urgent` reste `Urgent`, sans `TicketEvent`), renseigne `EscalatedAt`, ajoute un `TicketEvent` (`PriorityChanged`, acteur nul) quand la priorité change ; un ticket qui n'est plus `New` ou `Open` n'est pas escaladé, recalcule les échéances SLA, e-mail aux TenantAdmin de l'entreprise. Idempotent grâce à `EscalatedAt` : un ticket n'est escaladé qu'une fois.
 - **`SlaWatcher`** (`BackgroundService` du Worker, toutes les 60 s) : pour les tickets en `New` ou `Open`, non escaladés, dont `ResolutionDueAt` est dépassé, ou `ResponseDueAt` dépassé sans `FirstResponseAt` ; publie `ticket.sla.breached` via l'outbox.
 
 ## 5. Temps réel (SignalR)
 
-Hub `/hubs/notifications`, authentifié par le JWT (`access_token` en query string pour le transport WebSocket). Groupes gérés par le serveur à la connexion : `user:{userId}` pour tous les rôles et `agents:{tenantId}` pour les rôles Agent et TenantAdmin. Un Requester ne reçoit jamais d'événement qui ne le concerne pas, et aucun événement ne traverse les entreprises.
+Hub `/hubs/notifications`, authentifié par le JWT (`access_token` en query string pour le transport WebSocket). Groupes gérés par le serveur à la connexion  : `user:{userId}` et `agents:{tenantId}`, pour les rôles Agent et TenantAdmin seulement (un Requester ou le SuperAdmin est refusé à la connexion : 403). Aucun événement ne traverse les entreprises.
 
 Événements serveur vers client (charges en camelCase) :
 
@@ -76,3 +76,8 @@ Le client n'appelle aucune méthode serveur. La perte de connexion n'efface rien
 - `Messaging:FailConsumer=<nom>` : force le consommateur nommé à échouer (démonstration des retries et de la DLQ, tests).
 - Commande du Worker `replay-dlq` : republie les messages de `desk.dlq` vers leur exchange d'origine (runbook `docs/runbooks/dlq.md`, rédigé par l'orchestrateur).
 - Connexion : `ConnectionStrings:RabbitMq` (déjà en place).
+
+## 7. Précisions de la tranche B
+- Le marqueur « une seule émission » de `ticket.sla.breached` est la table `SlaBreaches` (clé `(TicketId, Kind)`), écrite dans la transaction de l'outbox (ADR 009). Si les deux échéances sont dépassées, `response` et `resolution` sont émis ; le second est sans effet grâce à `EscalatedAt`.
+- Le brouillon d'article reprend verbatim le titre et la description du ticket : il peut contenir des données personnelles saisies par le demandeur ; il reste au statut `Draft` et sans endpoint avant la phase 4.
+- Le `/health/ready` de l'API n'inclut pas le consommateur temps réel ; celui du Worker inclut ses consommateurs.

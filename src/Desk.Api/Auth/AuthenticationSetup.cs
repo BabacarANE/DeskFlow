@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using AspNet.Security.OAuth.GitHub;
 using Desk.Api.Http;
+using Desk.Api.Realtime;
 using Desk.Core.Domain;
 using Desk.Core.Rules;
 using Desk.Infrastructure.Auth;
@@ -29,6 +30,21 @@ public static class AuthenticationSetup
             {
                 o.MapInboundClaims = false;
                 o.TokenValidationParameters = JwtTokenService.ValidationParameters(jwt);
+                // Browsers cannot set a header on a WebSocket: SignalR sends the token as ?access_token=. Accepted for the hub
+                // path only: anywhere else a token in a URL (logged by proxies) is ignored.
+                o.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var token = context.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(NotificationsHub.Path))
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                };
             });
 
         // Providers without credentials are simply not registered: the API still starts.
