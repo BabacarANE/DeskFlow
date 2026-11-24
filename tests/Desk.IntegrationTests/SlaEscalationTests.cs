@@ -146,11 +146,19 @@ public class SlaEscalationTests(PostgresFixture postgres, RabbitMqFixture rabbit
         Assert.Equal(before.CreatedAt.AddMinutes(policy.FirstResponseMinutes), after.ResponseDueAt);
         Assert.Equal(before.CreatedAt.AddMinutes(policy.ResolutionMinutes), after.ResolutionDueAt);
 
-        var audit = Assert.Single(await ReadAsync(db => db.TicketEvents.IgnoreQueryFilters().Where(e => e.TicketId == ticket.Id).ToListAsync()));
-        Assert.Equal(TicketEventType.PriorityChanged, audit.Type);
-        Assert.Null(audit.ActorId);
-        Assert.Equal(from.ToString(), audit.OldValue);
-        Assert.Equal(expected.ToString(), audit.NewValue);
+        var audits = await ReadAsync(db => db.TicketEvents.IgnoreQueryFilters().Where(e => e.TicketId == ticket.Id).ToListAsync());
+        if (from == expected)
+        {
+            Assert.Empty(audits); // already Urgent: nothing changed, no audit event (EscalatedAt and the e-mails still happen)
+        }
+        else
+        {
+            var audit = Assert.Single(audits);
+            Assert.Equal(TicketEventType.PriorityChanged, audit.Type);
+            Assert.Null(audit.ActorId);
+            Assert.Equal(from.ToString(), audit.OldValue);
+            Assert.Equal(expected.ToString(), audit.NewValue);
+        }
 
         // Active TenantAdmins of this company only: not the inactive one, not the agents, not the requester.
         Assert.Equal(new[] { c.Admin.Email, c.Admin2.Email }.Order(), worker.Email.Sent.Select(m => m.To).Order());

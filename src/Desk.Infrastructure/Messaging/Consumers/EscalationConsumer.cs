@@ -47,15 +47,19 @@ public sealed class EscalationConsumer(
         ticket.ChangePriority(to, policy.FirstResponseMinutes, policy.ResolutionMinutes);
         ticket.EscalatedAt = now;
         ticket.UpdatedAt = now;
-        db.TicketEvents.Add(new TicketEvent
+        if (to != from)
         {
-            TicketId = ticket.Id,
-            ActorId = null,
-            Type = TicketEventType.PriorityChanged,
-            OldValue = from.ToString(),
-            NewValue = to.ToString(),
-            At = now,
-        });
+            db.TicketEvents.Add(new TicketEvent
+            {
+                TicketId = ticket.Id,
+                ActorId = null,
+                Type = TicketEventType.PriorityChanged,
+                OldValue = from.ToString(),
+                NewValue = to.ToString(),
+                At = now,
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         var admins = await db.Users.AsNoTracking()
