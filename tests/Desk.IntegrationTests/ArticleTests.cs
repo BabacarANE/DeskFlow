@@ -423,4 +423,38 @@ public class ArticleTests(PostgresFixture postgres) : TicketTestBase(postgres)
         Assert.True((await JsonAsync(blockedSolution)).GetProperty("errors").TryGetProperty("solution", out _));
         Assert.Equal("Draft", (await JsonAsync(await agent.GetAsync($"/api/v1/articles/{noSymptom.GetProperty("id").GetGuid()}"))).GetProperty("status").GetString());
     }
+
+    [Fact]
+    public async Task A_published_article_cannot_lose_its_symptom_or_solution_but_a_draft_can()
+    {
+        var c = await BuildCompanyAsync("kb-complete");
+        var agent = c.Agent.Session;
+        var article = await PublishedAsync(agent, Body());
+        var id = article.GetProperty("id").GetGuid();
+
+        foreach (var (body, field) in new (object, string)[]
+        {
+            (Body(symptom: ""), "symptom"),
+            (Body(symptom: "   "), "symptom"),
+            (Body(solution: ""), "solution"),
+            (Body(solution: " 	 "), "solution"),
+        })
+        {
+            var response = await agent.PutAsync($"/api/v1/articles/{id}", body);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.True((await JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), field);
+        }
+
+        // Nothing changed; an empty cause and a title still of 3 characters are fine; the title rule is unchanged.
+        Assert.Equal(article.GetRawText(), (await JsonAsync(await agent.GetAsync($"/api/v1/articles/{id}"))).GetRawText());
+        Assert.Equal(HttpStatusCode.OK, (await agent.PutAsync($"/api/v1/articles/{id}", Body(title: "abc", cause: ""))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await agent.PutAsync($"/api/v1/articles/{id}", Body(title: "ab"))).StatusCode);
+
+        // Once unpublished it is a draft again: free to be emptied.
+        await agent.PostAsync($"/api/v1/articles/{id}/unpublish", new { });
+        var emptied = await agent.PutAsync($"/api/v1/articles/{id}", Body(symptom: "", solution: ""));
+        Assert.Equal(HttpStatusCode.OK, emptied.StatusCode);
+        var draft = await CreateAsync(agent, Body(symptom: "", solution: ""));
+        Assert.Equal(HttpStatusCode.OK, (await agent.PutAsync($"/api/v1/articles/{draft.GetProperty("id").GetGuid()}", Body(symptom: "", solution: ""))).StatusCode);
+    }
 }

@@ -166,4 +166,30 @@ public class SlaPolicyTests(PostgresFixture postgres) : TicketTestBase(postgres)
         var rows = await QueryDbAsync(db => db.SlaPolicies.IgnoreQueryFilters().Where(p => p.TenantId == betaId).Select(p => p.FirstResponseMinutes).ToListAsync());
         Assert.Equal([7, 7, 7, 7], rows);
     }
+
+    [Fact]
+    public async Task Concurrent_first_writes_on_a_company_without_rows_all_succeed_and_leave_four_rows()
+    {
+        var c = await BuildCompanyAsync("sla-race");
+        await WithDbAsync(async db =>
+        {
+            await db.SlaPolicies.IgnoreQueryFilters().Where(p => p.TenantId == c.TenantId).ExecuteDeleteAsync();
+        });
+        Assert.Equal(0, await QueryDbAsync(db => db.SlaPolicies.IgnoreQueryFilters().CountAsync(p => p.TenantId == c.TenantId)));
+
+        // Without rows the table reads as the defaults.
+        Assert.Equal(DefaultTable, await ReadAsync(c.Admin.Session));
+
+        // Eight writers insert the four rows at the same time: the unique index (TenantId, Priority) must not leak as a 500.
+        var responses = await Task.WhenAll(Enumerable.Range(1, 8)
+            .Select(i => Task.Run(() => c.Admin.Session.PutAsync("/api/v1/sla-policies", Valid(urgentFirst: i, urgentResolution: i + 10)))));
+        foreach (var r in responses)
+        {
+            Assert.True(r.StatusCode == HttpStatusCode.OK, $"{(int)r.StatusCode} {await r.Content.ReadAsStringAsync()}");
+        }
+
+        Assert.Equal(4, await QueryDbAsync(db => db.SlaPolicies.IgnoreQueryFilters().CountAsync(p => p.TenantId == c.TenantId)));
+        var urgent = (await ReadAsync(c.Admin.Session)).Single(l => l.Priority == "Urgent");
+        Assert.Equal(urgent.First + 10, urgent.Resolution);
+    }
 }

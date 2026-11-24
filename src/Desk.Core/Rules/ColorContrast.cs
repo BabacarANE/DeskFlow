@@ -40,6 +40,6 @@ public static partial class ColorContrast
     private static double Channel(string hex, int start)
     {
         var value = int.Parse(hex.AsSpan(start, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture) / 255.0;
-        return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 }

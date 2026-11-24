@@ -177,6 +177,18 @@ public static class ArticleEndpoints
             return Problems.NotFound();
         }
 
+        // A published article stays complete: its symptom and solution cannot be emptied (a draft is free).
+        if (article.Status == ArticleStatus.Published)
+        {
+            var errors = new Dictionary<string, string[]>();
+            if (string.IsNullOrWhiteSpace(request.Symptom)) { errors["symptom"] = ["Le symptôme d'un article publié ne peut pas être vide."]; }
+            if (string.IsNullOrWhiteSpace(request.Solution)) { errors["solution"] = ["La solution d'un article publié ne peut pas être vide."]; }
+            if (errors.Count > 0)
+            {
+                return Results.ValidationProblem(errors, statusCode: 422, title: "Données invalides");
+            }
+        }
+
         // Last write wins (no rowVersion in the contract); the status, author and source ticket never change here.
         Apply(article, request);
         await db.SaveChangesAsync(ct);

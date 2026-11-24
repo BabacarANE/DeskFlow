@@ -78,6 +78,8 @@ app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+// After authorization (401 and 403 come first): a U+0000 in any text input is a 422, never a PostgreSQL 500.
+app.UseMiddleware<NulCharacterGuard>();
 
 app.MapDeskHealthChecks();
 app.MapOpenApi();

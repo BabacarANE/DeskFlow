@@ -42,6 +42,13 @@ public static class SlaEndpoints
             return Problems.Forbidden("Aucune entreprise associée à ce compte.");
         }
 
+        // Writers of one company queue up on a transaction-scoped advisory lock: without it, two PUTs on a company with
+        // no rows break the unique index (TenantId, Priority), and two PUTs updating the four rows in different orders
+        // deadlock (observed: 40P01). The lock key is a parameter, and it is released at commit or rollback.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var lockKey = "sla-policies:" + tenantId;
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct);
+
         var rows = await db.SlaPolicies.ToListAsync(ct);
         foreach (var line in request.Policies!)
         {
@@ -59,6 +66,7 @@ public static class SlaEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Results.Ok(Ordered(rows));
     }
 }
