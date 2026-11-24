@@ -9,7 +9,7 @@ Complète `docs/api/openapi.json` (version `0.3.0-phase4`, gelée par l'orchestr
 | `GET /articles` | Connecté | Requester : articles `Published` seulement (le paramètre `status` est ignoré). Agent et TenantAdmin : tous, filtrables par `status`. Tri : voir `q` ci-dessous ; sans `q`, `Published` par `PublishedAt` décroissant puis les brouillons par `CreatedAt` décroissant. |
 | `GET /articles/{id}` | Connecté | Un brouillon est 404 pour un Requester ; un article d'une autre entreprise est 404 pour tous. |
 | `POST /articles` | Agent, TenantAdmin | Crée un `Draft`, `AuthorId` = l'utilisateur, `SourceTicketId` nul. |
-| `PUT /articles/{id}` | Agent, TenantAdmin | Remplace titre, symptôme, cause, solution, étiquettes ; le statut ne change pas ; dernier enregistrement gagnant (pas de `rowVersion`). |
+| `PUT /articles/{id}` | Agent, TenantAdmin | Remplace titre, symptôme, cause, solution, étiquettes ; le statut ne change pas ; dernier enregistrement gagnant (pas de `rowVersion`) ; **sur un article `Published`, 422 si le symptôme ou la solution devient vide** (un article publié reste lisible et complet). |
 | `POST /articles/{id}/publish` | Agent, TenantAdmin | `Draft` vers `Published`, `PublishedAt` = maintenant ; déjà publié : 200 sans changement ; 422 si titre, symptôme ou solution est vide (une cause vide est permise). |
 | `POST /articles/{id}/unpublish` | Agent, TenantAdmin | Retour à `Draft`, `PublishedAt` effacé ; déjà `Draft` : 200 sans changement. |
 
@@ -48,3 +48,10 @@ Aucun changement de contrat : `GET/POST/PUT/DELETE /categories` existent depuis 
 - `/tickets/new` : suggestions d'articles sous le titre (voir plus haut).
 - `/admin` : onglets Catégories, SLA, Thème (en plus d'utilisateurs et invitations existants). Thème : trois sélecteurs de couleur, consigne « Choisissez deux couleurs discrètes et une couleur qui claque. », aperçu en direct (mini liste de tickets et un bouton), bouton « Réinitialiser », avertissements affichés ; après enregistrement, le thème s'applique immédiatement (variables CSS sur `:root`).
 - Navigation : entrée « Base de connaissances » pour tous les rôles connectés avec une entreprise.
+
+## 6. Précisions de l'implémentation
+- La recherche ne replie pas les accents (`ILIKE` en locale C ; l'extension `unaccent` n'est pas garantie) : « imprimante » ne trouve pas « imprimanté ». Elle ignore la casse.
+- `solution` accepte 8 000 caractères (migration `ArticleSearchAndSolutionLength` : colonne portée de 5 000 à 8 000, index `(TenantId, Status, PublishedAt)`).
+- Un `q` de plus de 100 caractères, un `status` inconnu ou une pagination invalide donnent 422, comme sur les tickets.
+- Tri : titre contenant tous les mots d'abord, puis articles publiés avant brouillons, puis `PublishedAt` décroissant.
+- Le caractère NUL (`U+0000`) est refusé en 422 dans `q` et dans tous les champs texte (PostgreSQL ne l'accepte pas en `text`) ; pas de 500.
