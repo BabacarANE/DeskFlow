@@ -21,3 +21,4 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [015](015-outbox-invalid-row-blocks-dispatcher.md) | Une ligne d'outbox invalide bloquait le dispatcher | Worker |
 | [016](016-ef-migrations-tooling-worktree.md) | `dotnet ef` échoue dans un worktree et formate mal les migrations | Outillage |
 | [017](017-signalr-websocket-401-dotnet-client.md) | WebSocket du hub refusé en 401 alors que la négociation passait (tests) | Tests |
+| [018](018-hub-token-in-nginx-access-log.md) | Le jeton du hub SignalR apparaissait dans les journaux nginx | Docker |

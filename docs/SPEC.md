@@ -157,7 +157,7 @@ L'API gère OAuth côté serveur et émet ses propres jetons ; Angular ne manipu
 
 ## 6. Modèle de données
 
-Quinze entités suffisent (les treize initiales, plus `KnowledgeArticle` et `SlaBreach`, marqueur d'émission unique de l'alerte SLA, ADR 009) pour le MVP ; les données métier portent un `TenantId` (nul pour le SuperAdmin dans `User`). `Tenant`, `ExternalLogin`, `RefreshToken`, `OutboxMessage` et `ProcessedMessage` n'en portent pas (`SlaBreach` en porte un, filtré comme les autres) : l'outbox transporte le `TenantId` dans le message publié.
+Quinze entités suffisent (les treize du tableau, plus `TicketCounter`, compteur de numéros par entreprise, ADR 006, et `SlaBreach`, marqueur d'émission unique de l'alerte SLA, ADR 009) pour le MVP ; les données métier portent un `TenantId` (nul pour le SuperAdmin dans `User`). `Tenant`, `ExternalLogin`, `RefreshToken`, `OutboxMessage` et `ProcessedMessage` n'en portent pas (`SlaBreach` en porte un, filtré comme les autres) : l'outbox transporte le `TenantId` dans le message publié.
 
 | Entité | Champs clés | Règles |
 | --- | --- | --- |

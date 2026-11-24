@@ -59,7 +59,7 @@ Retries, dead-letter queue et idempotence : SPEC section 8 (3 tentatives à 5 s,
 
 ## 5. Temps réel (SignalR)
 
-Hub `/hubs/notifications`, authentifié par le JWT (`access_token` en query string pour le transport WebSocket). Groupes gérés par le serveur à la connexion : `user:{userId}` pour tous les rôles et `agents:{tenantId}` pour les rôles Agent et TenantAdmin. Un Requester ne reçoit jamais d'événement qui ne le concerne pas, et aucun événement ne traverse les entreprises.
+Hub `/hubs/notifications`, authentifié par le JWT (`access_token` en query string pour le transport WebSocket). Groupes gérés par le serveur à la connexion  : `user:{userId}` et `agents:{tenantId}`, pour les rôles Agent et TenantAdmin seulement (un Requester ou le SuperAdmin est refusé à la connexion : 403). Aucun événement ne traverse les entreprises.
 
 Événements serveur vers client (charges en camelCase) :
 
