@@ -192,6 +192,64 @@ public class SlaEscalationTests(PostgresFixture postgres, RabbitMqFixture rabbit
         Assert.Equal(2, worker.Email.Sent.Count); // one per admin, once
     }
 
+    /// <summary>Once, before the first save of a Ticket, rewrites the row from another connection: the save then fails on xmin.</summary>
+    private sealed class ConflictOnFirstTicketSave(string connectionString) : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        private int _fired;
+
+        public Func<int>? EmailsSentSoFar { get; set; }
+
+        public int EmailsAtConflict { get; private set; } = -1;
+
+        public override async ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var ticket = eventData.Context!.ChangeTracker.Entries<Ticket>().FirstOrDefault(e => e.State == EntityState.Modified);
+            if (ticket is not null && Interlocked.Exchange(ref _fired, 1) == 0)
+            {
+                EmailsAtConflict = EmailsSentSoFar?.Invoke() ?? -1;
+                await using var other = new Npgsql.NpgsqlConnection(connectionString);
+                await other.OpenAsync(cancellationToken);
+                await using var command = new Npgsql.NpgsqlCommand("UPDATE \"Tickets\" SET \"Title\" = 'Modifié par un agent' WHERE \"Id\" = @id", other);
+                command.Parameters.AddWithValue("id", ticket.Entity.Id);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            return result;
+        }
+    }
+
+    [Fact]
+    public async Task A_concurrent_edit_between_load_and_save_fails_the_first_attempt_which_is_replayed_with_no_early_email()
+    {
+        var c = await SeedCompanyAsync("esc-xmin");
+        var ticket = await AddTicketAsync(c, t => { Overdue(t); t.Priority = Priority.Low; });
+        var conflict = new ConflictOnFirstTicketSave(ConnectionString);
+        await using var worker = await StartWorkerAsync(NoWatcher, configure: services =>
+        {
+            services.ConfigureDbContext<Desk.Infrastructure.Persistence.DeskDbContext>(o => o.AddInterceptors(conflict));
+        });
+        conflict.EmailsSentSoFar = () => worker.Email.Entered;
+
+        var message = Breached(c.TenantId, ticket);
+        await PublishAsync(message);
+        await WaitProcessedAsync("EscalationConsumer", message.MessageId, 30);
+
+        Assert.Equal(0, conflict.EmailsAtConflict); // nothing was sent before the (failed) save
+        Assert.Contains(worker.Logs.Lines, l => l.StartsWith("Warning", StringComparison.Ordinal) && l.Contains("retry in", StringComparison.Ordinal)
+            && l.Contains("EscalationConsumer", StringComparison.Ordinal));
+        Assert.Equal(1, worker.Logs.Lines.Count(l => l.StartsWith("Warning", StringComparison.Ordinal) && l.Contains("retry in", StringComparison.Ordinal))); // replayed once
+        var after = await ReadAsync(db => db.Tickets.IgnoreQueryFilters().SingleAsync(t => t.Id == ticket.Id));
+        Assert.Equal(Priority.Normal, after.Priority); // one step
+        Assert.NotNull(after.EscalatedAt);
+        Assert.Equal("Modifié par un agent", after.Title); // the concurrent edit was not overwritten
+        Assert.Equal(1, await ReadAsync(db => db.TicketEvents.IgnoreQueryFilters().CountAsync(e => e.TicketId == ticket.Id)));
+        Assert.Equal(new[] { c.Admin.Email, c.Admin2.Email }.Order(), worker.Email.Sent.Select(m => m.To).Order()); // one set of e-mails
+        Assert.Equal(2, worker.Email.Entered);
+        Assert.Equal(0u, await Broker.CountAsync(MessagingNames.DlqQueue));
+    }
+
     [Fact]
     public async Task Racing_escalations_raise_the_priority_once_concurrency_conflicts_are_retried_not_lost()
     {

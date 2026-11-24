@@ -28,6 +28,17 @@ public sealed class HubProbe(HubConnection connection) : IAsyncDisposable
 /// <summary>Builds hub clients that talk to the in-process API (WebSocket transport, token in the query string).</summary>
 public static class HubClients
 {
+    private const string Witness = "witness";
+
+    /// <summary>The <c>tid</c> claim of the (unvalidated, test-side) JWT.</summary>
+    private static Guid TenantOf(string jwt)
+    {
+        var payload = jwt.Split('.')[1].Replace('-', '+').Replace('_', '/');
+        payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+        using var json = JsonDocument.Parse(Convert.FromBase64String(payload));
+        return json.RootElement.GetProperty("tid").GetGuid();
+    }
+
     public static async Task<HubProbe> ConnectAsync(DeskFactory factory, string? token, bool skipNegotiation = false)
     {
         var connection = new HubConnectionBuilder()
@@ -67,7 +78,17 @@ public static class HubClients
             throw;
         }
 
-        await Task.Delay(300); // the server joins the groups right after the handshake
+        // The server joins the groups right after the handshake: send a witness to the LAST group joined (agents:{tid}) until
+        // this client receives it, which proves it is in its groups. Bounded wait, no fixed sleep.
+        var witness = new TaskCompletionSource();
+        connection.On(Witness, () => witness.TrySetResult());
+        var hub = factory.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<Desk.Api.Realtime.NotificationsHub>>();
+        var group = Desk.Infrastructure.Messaging.Consumers.RealtimeGroups.Agents(TenantOf(token!));
+        await Poll.UntilAsync(async () =>
+        {
+            await Microsoft.AspNetCore.SignalR.ClientProxyExtensions.SendAsync(hub.Clients.Group(group), Witness);
+            return await Task.WhenAny(witness.Task, Task.Delay(100)) == witness.Task;
+        }, "hub client joined its groups", 10);
         return probe;
     }
 }
