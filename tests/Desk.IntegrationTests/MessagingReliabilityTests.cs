@@ -291,7 +291,8 @@ public class MessagingReliabilityTests(PostgresFixture postgres, RabbitMqFixture
     [Fact]
     public async Task The_declared_topology_matches_the_contract_table_exactly()
     {
-        await using var worker = await StartWorkerAsync();
+        // No consumer: the routing itself is under test (the consumers would drain the queues this test counts).
+        await using var worker = await StartWorkerAsync(consumers: false);
         var expected = new Dictionary<string, string[]>
         {
             ["desk.email-ack"] = ["ticket.created"],
@@ -334,10 +335,11 @@ public class MessagingReliabilityTests(PostgresFixture postgres, RabbitMqFixture
     [InlineData("ticket.assigned", "desk.assignment-notifier")]
     [InlineData("ticket.commented", "desk.comment-notifier")]
     [InlineData("ticket.resolved", "desk.kb-draft")]
-    public async Task An_event_without_implemented_consumer_is_kept_in_its_queue_not_lost(string type, string queue)
+    public async Task An_event_without_a_running_consumer_is_kept_in_its_queue_not_lost(string type, string queue)
     {
+        // The consumers exist now: this Worker simply does not host any (consumers: false), the property is unchanged.
         var ticket = await SeedTicketAsync("kept-" + type.Replace('.', '-'));
-        await using var worker = await StartWorkerAsync();
+        await using var worker = await StartWorkerAsync(consumers: false);
         var envelope = MessageEnvelope.Create(Guid.NewGuid(), type, ticket.TenantId, DateTimeOffset.UtcNow, "c", new { ticketId = ticket.TicketId });
 
         await AddToOutboxAsync(envelope);
