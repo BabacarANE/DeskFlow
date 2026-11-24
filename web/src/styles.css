@@ -19,6 +19,19 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Local theme scope (theme preview). The derived tints are declared on :root, so a container that
+ * overrides --color-primary / --color-surface / --color-accent must re-declare them to follow.
+ * The five variables themselves are written inline on the container, never on :root.
+ */
+.theme-scope {
+  --tint-primary: color-mix(in srgb, var(--color-primary) 22%, white);
+  --tint-card: color-mix(in srgb, var(--color-surface) 35%, white);
+  --tint-line: color-mix(in srgb, var(--color-ink) 18%, var(--color-surface));
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
 /* Shared building blocks. Colours only come from the palette variables. */
 @layer components {
   .card {
