@@ -25,6 +25,12 @@ export const routes: Routes = [
     loadChildren: () => import('./features/tickets/tickets.routes').then((m) => m.TICKETS_ROUTES),
   },
   {
+    path: 'kb',
+    // Every role that belongs to a company (not the SuperAdmin); editing is restricted in kb.routes.
+    canActivate: [roleGuard(['TenantAdmin', 'Agent', 'Requester'])],
+    loadChildren: () => import('./features/kb/kb.routes').then((m) => m.KB_ROUTES),
+  },
+  {
     path: 'admin',
     canActivate: [roleGuard(['TenantAdmin'])],
     loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),

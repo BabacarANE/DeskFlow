@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -7,11 +8,12 @@ import { ApiError, errorMessage } from '../../core/api/api-error';
 import { PRIORITIES, PRIORITY_LABELS } from '../../core/api/labels';
 import { Category, CreateTicketRequest, TicketPriority } from '../../core/api/models';
 import { FieldError, applyFieldErrors } from '../../shared/field-error';
+import { ArticleSuggestions } from './article-suggestions';
 
 @Component({
   selector: 'app-ticket-new',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, FieldError],
+  imports: [ReactiveFormsModule, RouterLink, FieldError, ArticleSuggestions],
   template: `
     <section class="space-y-6" aria-labelledby="new-ticket-title">
       <div>
@@ -31,6 +33,7 @@ import { FieldError, applyFieldErrors } from '../../shared/field-error';
             formControlName="title"
           />
           <app-field-error [control]="form.controls.title" />
+          <app-article-suggestions [term]="title()" />
         </div>
 
         <div>
@@ -104,6 +107,9 @@ export class TicketNew implements OnInit {
     categoryId: [''],
     priority: ['Normal' as TicketPriority, Validators.required],
   });
+
+  /** Title being typed, for the article suggestions. */
+  protected readonly title = toSignal(this.form.controls.title.valueChanges, { initialValue: '' });
 
   protected readonly categories = signal<Category[]>([]);
   protected readonly busy = signal(false);
