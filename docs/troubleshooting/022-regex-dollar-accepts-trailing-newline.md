@@ -1,5 +1,5 @@
 # 022 — Une couleur `#123456\n` était acceptée par la validation du thème
-Date : 2026-11-25 · Phase : 4 · Composant : API · Lien : PR `feat/p4-backend`
+Date : 2026-11-24 · Phase : 4 · Composant : API · Lien : PR `feat/p4-backend`
 
 ## Symptôme
 Un test unitaire a montré que `"#123456\n"` passait la validation du format `#RRGGBB`. Enregistrée, la valeur de 8 caractères aurait dépassé la colonne de 7 caractères et provoqué un 500 sur `PUT /theme`.
