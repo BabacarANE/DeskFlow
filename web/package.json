@@ -9,6 +9,8 @@
     "test": "ng test",
     "lint": "ng lint",
     "start:mock": "ng serve --configuration mock",
+    "format": "prettier --write \"src/**/*.{ts,html,css}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,css}\" \"*.{json,md}\"",
     "check:no-mock": "node scripts/check-no-mock.mjs"
   },
   "private": true,
