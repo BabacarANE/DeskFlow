@@ -82,7 +82,13 @@ test.describe.serial('ticket journey', () => {
 
     // New -> Open (when the assignment did not already open it) -> Resolved.
     const open = agent.getByRole('button', { name: 'Passer à « Ouvert »' });
-    if (await open.isVisible()) await open.click();
+    const alreadyOpen = agent.getByText('Statut : Ouvert');
+    // Wait for the page to settle on one of the two states before branching (the assignment may open it).
+    await expect(open.or(alreadyOpen)).toBeVisible();
+    if (await open.isVisible()) {
+      await open.click();
+      await expect(alreadyOpen).toBeVisible();
+    }
     await agent.getByRole('button', { name: 'Passer à « Résolu »' }).click();
     await expect(agent.getByText('Statut : Résolu')).toBeVisible();
   });
