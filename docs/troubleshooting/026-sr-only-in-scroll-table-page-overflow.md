@@ -1,4 +1,4 @@
-# 030 — Défilement horizontal de toute la page sur mobile (admin, Utilisateurs)
+# 026 — Défilement horizontal de toute la page sur mobile (admin, Utilisateurs)
 Date : 2026-11-25 · Phase : 5 · Composant : Web · Lien : branche `feat/p5-e2e`
 
 ## Symptôme

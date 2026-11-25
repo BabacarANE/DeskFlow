@@ -1,7 +1,7 @@
 import { Page, expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MAILPIT_URL, demoLogin } from '../helpers';
+import { MAILPIT_URL, demoLogin, demoToken, findMails } from '../helpers';
 
 /**
  * Captures the README screenshots (1440x900) into docs/img. Meant to run against the stack with the
@@ -59,7 +59,27 @@ test.describe.serial('README screenshots', () => {
     await shot(page, 'admin-theme');
   });
 
-  test('Mailpit acknowledgement e-mail', async ({ page }) => {
+  test('Mailpit acknowledgement e-mail', async ({ page, request }) => {
+    // The demo seeder sends no e-mail on purpose: create one ticket as the requester (last test, so
+    // it does not appear in the lists captured above) and wait for its acknowledgement.
+    const token = await demoToken(request, 'demandeur');
+    const created = await request.post('/api/v1/tickets', {
+      headers: { authorization: `Bearer ${token}` },
+      data: {
+        title: 'Imprimante du 2e étage hors service',
+        description: 'Le bac 2 est bloqué depuis ce matin. (Données fictives)',
+        priority: 'Normal',
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    await expect
+      .poll(
+        async () => (await findMails(request, 'demandeur@demo.deskflow.example', 'reçue')).length,
+        {
+          timeout: 15_000,
+        },
+      )
+      .toBeGreaterThan(0);
     await page.goto(MAILPIT_URL);
     await page.getByText('Votre demande a bien été reçue').first().click();
     await expect(page.frameLocator('#preview-html').locator('body')).not.toBeEmpty();
