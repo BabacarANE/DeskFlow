@@ -11,13 +11,13 @@ Pré-requis : `docker compose up --build` terminé (tous les services sains), `D
 ## 2. L'agent traite le ticket (1 min 30)
 
 1. Autre fenêtre : profil **Agent**. La liste contient 30 tickets de démonstration plus le vôtre ; filtrez par statut, priorité ou assigné.
-2. Ouvrez votre ticket → **M'assigner** → **Passer à « Ouvert »**, puis écrivez une **réponse publique**. Le demandeur reçoit un e-mail (Mailpit) ; une **note interne** reste invisible pour lui.
+2. Ouvrez votre ticket → **M’assigner** → **Passer à « Ouvert »**, puis écrivez une **réponse publique**. Le demandeur reçoit un e-mail (Mailpit) ; une **note interne** reste invisible pour lui.
 3. Cliquez la **cloche** : les événements arrivent en temps réel (SignalR).
 4. **Passer à « Résolu ».**
 
 ## 3. Un brouillon d'article apparaît (30 s)
 
-Toujours en agent : **Base de connaissances** → filtre « Brouillon ». Le ticket résolu a produit un **brouillon pré-rempli** (symptôme, solution) lié au ticket source. Éditez-le puis **Publier** : il devient visible du demandeur.
+Toujours en agent : **Base de connaissances** → filtre de statut « Brouillons ». Le ticket résolu a produit un **brouillon pré-rempli** (symptôme, solution) lié au ticket source. Éditez-le puis **Publier** : il devient visible du demandeur.
 
 ## 4. L'administrateur change le thème (1 min)
 
@@ -50,4 +50,4 @@ L'e-mail arrive dans Mailpit. Détails : [runbook DLQ](runbooks/dlq.md).
 
 ## Remarque sur l'escalade SLA
 
-Quatre tickets de démonstration approchent de leur échéance : en laissant la démo tourner, le `SlaWatcher` peut escalader l'un d'eux une seule fois et envoyer un e-mail à l'administrateur (visible dans Mailpit). C'est voulu.
+Quelques tickets de démonstration approchent de leur échéance : en laissant la démo tourner, le `SlaWatcher` peut escalader l'un d'eux une seule fois et envoyer un e-mail à l'administrateur (visible dans Mailpit). C'est voulu.
