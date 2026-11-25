@@ -29,4 +29,4 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [023](023-nul-character-500.md) | Un caractère NUL dans une requête provoquait un 500 | API |
 | [024](024-sla-concurrent-put-deadlock.md) | Des `PUT /sla-policies` simultanés provoquaient un deadlock | API |
 | [025](025-empty-body-500.md) | Un corps vide, `null` ou d'un mauvais type répondait 500 | API |
-| [030](030-sr-only-in-scroll-table-page-overflow.md) | Défilement horizontal de la page sur mobile (`sr-only` dans un tableau défilant) | Web |
+| [026](026-sr-only-in-scroll-table-page-overflow.md) | Défilement horizontal de la page sur mobile (`sr-only` dans un tableau défilant) | Web |
