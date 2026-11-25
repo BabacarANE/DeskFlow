@@ -1,0 +1,124 @@
+name: Deploy
+
+# Builds the three images and pushes them to GHCR. The SSH deployment only runs when the secrets
+# DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY exist (docs/deploy.md). Without them, only the images are published.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    outputs:
+      owner: ${{ steps.meta.outputs.owner }}
+      tag: ${{ steps.meta.outputs.tag }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: deskflow-api
+            dockerfile: docker/dotnet.Dockerfile
+            build-args: PROJECT=Desk.Api
+          - image: deskflow-worker
+            dockerfile: docker/dotnet.Dockerfile
+            build-args: PROJECT=Desk.Worker
+          - image: deskflow-web
+            dockerfile: docker/web.Dockerfile
+            build-args: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute image names and tags
+        id: meta
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          sha_tag="sha-${GITHUB_SHA::7}"
+          tags="ghcr.io/${owner}/${{ matrix.image }}:${sha_tag}"
+          # "latest" only moves on release tags, never on a manual run from a branch.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tags="${tags},ghcr.io/${owner}/${{ matrix.image }}:${GITHUB_REF_NAME},ghcr.io/${owner}/${{ matrix.image }}:latest"
+          fi
+          echo "owner=${owner}" >> "$GITHUB_OUTPUT"
+          echo "tag=${sha_tag}" >> "$GITHUB_OUTPUT"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build-args }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || 'deskflow' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+    steps:
+      - name: Check deployment secrets
+        id: gate
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_SSH_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_HOST, DEPLOY_USER or DEPLOY_SSH_KEY is missing: images published, SSH deployment skipped."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.enabled == 'true'
+
+      - name: Configure SSH
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            # Trust on first use: set DEPLOY_KNOWN_HOSTS to pin the server key.
+            ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          fi
+
+      - name: Copy the compose files
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/docker'"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" docker/Caddyfile docker/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker/"
+
+      - name: Pull the new images and restart
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          IMAGE_TAG: ${{ needs.images.outputs.tag }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The registry token goes through stdin, never on a command line; it expires with this workflow run.
+          printf '%s' "$REGISTRY_TOKEN" | ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash '$DEPLOY_PATH/docker/deploy.sh' '$DEPLOY_PATH' '$IMAGE_TAG' '$REGISTRY_USER'"

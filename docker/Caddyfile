@@ -1,0 +1,17 @@
+# HTTPS reverse proxy for docker-compose.prod.yml. Caddy gets and renews the Let's Encrypt certificate
+# for {$DOMAIN} on its own (ports 80 and 443 must be reachable from the Internet).
+# API routes go straight to the API (not through the web nginx) so that the API sees X-Forwarded-Proto: https,
+# which the OAuth redirect URIs and the Secure refresh cookie rely on.
+# Access logs stay off: the SignalR hub passes its JWT in the query string (ADR 009).
+{$DOMAIN} {
+	encode zstd gzip
+
+	@api path /api/* /hubs/* /health/* /signin-google /signin-google/* /signin-github /signin-github/*
+	handle @api {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}
