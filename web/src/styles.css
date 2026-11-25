@@ -79,7 +79,7 @@ body {
   }
 
   .table-wrap {
-    @apply overflow-x-auto;
+    @apply relative overflow-x-auto;
   }
   .table {
     @apply w-full border-collapse text-left text-sm;
