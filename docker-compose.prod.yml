@@ -1,0 +1,137 @@
+# Production / demo stack: prebuilt images from GHCR, HTTPS through Caddy, nothing but 80/443 public.
+# Usage and prerequisites: docs/deploy.md. Not tested on a real server yet (see docs/deploy.md).
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d --wait
+name: deskflow-prod
+
+x-dotnet-env: &dotnet-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_HTTP_PORTS: "8080"
+  ConnectionStrings__Postgres: Host=postgres;Database=${POSTGRES_DB:?set POSTGRES_DB in .env};Username=${POSTGRES_USER:?};Password=${POSTGRES_PASSWORD:?}
+  ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+  Smtp__Host: ${SMTP_HOST:-mailpit}
+  Smtp__Port: ${SMTP_PORT:-1025}
+  Smtp__UseTls: ${SMTP_USE_TLS:-false}
+  Smtp__User: ${SMTP_USER:-}
+  Smtp__Password: ${SMTP_PASSWORD:-}
+  Smtp__From: ${SMTP_FROM:-DeskFlow <no-reply@deskflow.local>}
+  App__PublicBaseUrl: https://${DOMAIN:?set DOMAIN in .env}
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER (lowercase GitHub owner) in .env}/deskflow-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?}/deskflow-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      <<: *dotnet-env
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      Database__MigrateOnStartup: "true"
+      Jwt__Key: ${JWT_KEY:?set JWT_KEY (32+ random characters) in .env}
+      Demo__Enabled: ${DEMO_ENABLED:-false}
+      SuperAdmin__Email: ${SUPERADMIN_EMAIL:-}
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      Authentication__GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
+      Authentication__GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    image: ghcr.io/${GHCR_OWNER:?}/deskflow-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      <<: *dotnet-env
+      Messaging__FailConsumer: ""
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    # No published port: the database is only reachable inside the compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
+    # Management UI on the loopback only: reach it with an SSH tunnel (ssh -L 15672:127.0.0.1:15672).
+    ports: ["127.0.0.1:15672:15672"]
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      # Run as the rabbitmq user (docs/troubleshooting/001)
+      test: ["CMD-SHELL", "su-exec rabbitmq rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # Optional mail catcher for a demo without an SMTP provider: `--profile mailpit`, with SMTP_HOST=mailpit.
+  # UI on the loopback only (SSH tunnel). With a real SMTP provider, leave this profile off.
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    profiles: [mailpit]
+    restart: unless-stopped
+    ports: ["127.0.0.1:8025:8025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  caddy-data:
+  caddy-config:
