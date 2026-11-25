@@ -277,6 +277,44 @@ public class ArticleTests(PostgresFixture postgres) : TicketTestBase(postgres)
     }
 
     [Fact]
+    public async Task Search_ignores_accents_on_both_sides_in_every_field_and_keeps_wildcards_literal()
+    {
+        var c = await BuildCompanyAsync("kb-accents");
+        var agent = c.Agent.Session;
+        await PublishedAsync(agent, Body("Imprimanté hors service", "Symptôme A", "Cause A", "Solution A", []));
+        await PublishedAsync(agent, Body("Imprimante déconnectée", "Symptôme B", "Cause B", "Solution B", []));
+        await PublishedAsync(agent, Body("Mot de passe expiré", "Message « mot de passe expiré »", "Délai dépassé", "Réinitialiser via le portail", ["accès", "sécurité"]));
+        await PublishedAsync(agent, Body("Écran noir", "Rien ne s'affiche", "Câble", "Brancher", []));
+        await PublishedAsync(agent, Body("Fiabilité à 100% garantie", "S", "C", "Remplacer l'élément fautif", []));
+        await PublishedAsync(agent, Body("Fiabilité à 100 pourcent", "S", "C", "Rien", []));
+
+        async Task<List<string>> Search(string q) => Titles(await ListAsync(agent, "?q=" + Uri.EscapeDataString(q)));
+
+        // "imprimante" finds "imprimanté" and the reverse; the case is ignored as well.
+        Assert.Equal(["Imprimante déconnectée", "Imprimanté hors service"], await Search("imprimante"));
+        Assert.Equal(await Search("imprimante"), await Search("imprimanté"));
+        Assert.Equal(await Search("imprimante"), await Search("IMPRIMANTÉ"));
+
+        // Accents are folded in the title, the symptom, the cause, the solution and the tags, for every word.
+        Assert.Equal(["Mot de passe expiré"], await Search("expire"));
+        Assert.Equal(["Mot de passe expiré"], await Search("EXPIRÉ"));
+        Assert.Equal(["Mot de passe expiré"], await Search("delai depasse"));
+        Assert.Equal(["Mot de passe expiré"], await Search("reinitialiser"));
+        Assert.Equal(["Mot de passe expiré"], await Search("acces securite"));
+        Assert.Equal(["Écran noir"], await Search("ecran"));
+        Assert.Equal(["Écran noir"], await Search("écran cable"));
+        Assert.Equal(["Fiabilité à 100% garantie"], await Search("element fautif"));
+
+        // Wildcards and the escape character stay literal on top of the accent folding.
+        Assert.Equal(["Fiabilité à 100% garantie"], await Search("fiabilite 100%"));
+        Assert.Empty(await Search("fiabilite 1%0"));
+        Assert.Empty(await Search("fiabilit_"));
+        Assert.Empty(await Search("fiabilite\\"));
+        Assert.Equal(2, (await Search("fiabilite")).Count);
+        Assert.Empty(await Search("imprimante inexistant"));
+    }
+
+    [Fact]
     public async Task Listing_is_paginated_sorted_without_search_and_validates_its_parameters()
     {
         var c = await BuildCompanyAsync("kb-page");

@@ -15,7 +15,7 @@ Complète `docs/api/openapi.json` (version `0.3.0-phase4`, gelée par l'orchestr
 
 Pas de suppression d'article dans le MVP. Un SuperAdmin (sans entreprise) reçoit 403 sur toutes les routes `/articles`.
 
-**Recherche** (`q`, 100 caractères au plus) : mots séparés par des espaces ; les mots de moins de 2 caractères sont ignorés ; tous les mots restants doivent apparaître, sans tenir compte de la casse (et si possible des accents), dans le titre, le symptôme, la cause, la solution ou les étiquettes. Les articles dont le titre contient tous les mots passent avant les autres, puis `PublishedAt` décroissant. Recherche simple (`ILIKE`), pas de plein texte avancé (SPEC section 3). Les caractères `%`, `_` et `\` de `q` sont traités comme du texte. Un `q` vide ou sans mot utile renvoie la liste sans filtre.
+**Recherche** (`q`, 100 caractères au plus) : mots séparés par des espaces ; les mots de moins de 2 caractères sont ignorés ; tous les mots restants doivent apparaître, sans tenir compte de la casse ni des accents (« imprimante » trouve « imprimanté » et inversement ; extension `unaccent`, ADR 010), dans le titre, le symptôme, la cause, la solution ou les étiquettes. Les articles dont le titre contient tous les mots passent avant les autres, puis `PublishedAt` décroissant. Recherche simple (`unaccent` + `ILIKE`), pas de plein texte avancé (SPEC section 3). Les caractères `%`, `_` et `\` de `q` sont traités comme du texte. Un `q` vide ou sans mot utile renvoie la liste sans filtre.
 
 **Suggestions à la saisie** : aucune route dédiée. L'écran `/tickets/new` appelle `GET /articles?q=<titre en cours>&pageSize=5` (Requester : donc publiés seulement), après 400 ms sans frappe et pour au moins 3 caractères saisis.
 
@@ -50,7 +50,7 @@ Aucun changement de contrat : `GET/POST/PUT/DELETE /categories` existent depuis 
 - Navigation : entrée « Base de connaissances » pour tous les rôles connectés avec une entreprise.
 
 ## 6. Précisions de l'implémentation
-- La recherche ne replie pas les accents (`ILIKE` en locale C ; l'extension `unaccent` n'est pas garantie) : « imprimante » ne trouve pas « imprimanté ». Elle ignore la casse.
+- La recherche ignore la casse et les accents des deux côtés (`unaccent(colonne) ILIKE unaccent(motif)`, extension créée par la migration `UnaccentExtension`, ADR 010). `%`, `_` et `\` restent littéraux ; l'ordre et les index sont inchangés.
 - `solution` accepte 8 000 caractères (migration `ArticleSearchAndSolutionLength` : colonne portée de 5 000 à 8 000, index `(TenantId, Status, PublishedAt)`).
 - Un `q` de plus de 100 caractères, un `status` inconnu ou une pagination invalide donnent 422, comme sur les tickets.
 - Tri : titre contenant tous les mots d'abord, puis articles publiés avant brouillons, puis `PublishedAt` décroissant.
