@@ -81,7 +81,7 @@ Sans identifiants OAuth, l'application démarre et seule la connexion de démo (
 | `DEPLOY_KNOWN_HOSTS` (secret, optionnel) | Sortie de `ssh-keyscan <hôte>` pour épingler la clé du serveur. Sans elle, la clé est acceptée à la première connexion (TOFU). |
 | `DEPLOY_PATH`, `DEPLOY_PORT` (variables, optionnelles) | Dossier sur le serveur (défaut `deskflow`, relatif au dossier personnel) et port SSH (défaut 22). |
 
-Le job utilise l'environnement GitHub `production` : on peut y exiger une validation manuelle. L'étape copie `docker-compose.prod.yml`, `docker/Caddyfile` et `docker/deploy.sh`, se connecte à GHCR avec le jeton éphémère du workflow (passé sur l'entrée standard, jamais en argument), mémorise `IMAGE_TAG` dans `.env`, puis fait `pull` et `up -d --wait`. Le `.env` du serveur doit exister (premier démarrage) : le workflow ne le crée pas et ne le modifie que pour `IMAGE_TAG`.
+Le job utilise l'environnement GitHub `production` : on peut y exiger une validation manuelle. L'étape copie `docker-compose.prod.yml`, `docker/Caddyfile` et `docker/deploy.sh`, se connecte à GHCR avec le jeton éphémère du workflow (passé sur l'entrée standard, jamais en argument), mémorise `IMAGE_TAG` dans `.env`, puis fait `pull` et `up -d --wait`. Si le dépôt est cloné dans un autre dossier que `deskflow` (ex. `DeskFlow`, la casse compte sous Linux), définir la variable `DEPLOY_PATH` en conséquence, sinon le workflow copie les fichiers dans un second dossier. Il écrase `docker-compose.prod.yml` et `docker/Caddyfile` du clone : un `git pull` ultérieur peut signaler un conflit local. Le `.env` du serveur doit exister (premier démarrage) : le workflow ne le crée pas et ne le modifie que pour `IMAGE_TAG`.
 
 ## Sauvegarde de PostgreSQL
 
