@@ -55,3 +55,4 @@ Aucun changement de contrat : `GET/POST/PUT/DELETE /categories` existent depuis 
 - Un `q` de plus de 100 caractères, un `status` inconnu ou une pagination invalide donnent 422, comme sur les tickets.
 - Tri : titre contenant tous les mots d'abord, puis articles publiés avant brouillons, puis `PublishedAt` décroissant.
 - Le caractère NUL (`U+0000`) est refusé en 422 dans `q` et dans tous les champs texte (PostgreSQL ne l'accepte pas en `text`) ; pas de 500.
+- Une route à corps obligatoire reçoit un corps vide, blanc (espaces seulement), `null` ou JSON invalide : **400** `ProblemDetails`, jamais 500 (voir `docs/api/errors.md`).

@@ -113,11 +113,29 @@ public sealed class ValidationFilter<T>(IValidator<T> validator) : IEndpointFilt
     }
 }
 
-/// <summary>A write that crosses tenants is a bug or an attack: reveal nothing (404) and log it.</summary>
+/// <summary>
+/// A write that crosses tenants is a bug or an attack: reveal nothing (404) and log it. A request the binder cannot read
+/// (<see cref="BadHttpRequestException"/>: wrong JSON type, unsupported media type...) is the caller's mistake, not a server
+/// error: the exception middleware would turn it into a 500, so it is answered here with its own 4xx status.
+/// </summary>
 public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken ct)
     {
+        if (exception is BadHttpRequestException or System.Text.Json.JsonException)
+        {
+            var status = exception is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status400BadRequest;
+            logger.LogInformation("Unreadable request refused with {Status}: {Reason}", status, exception.GetType().Name);
+            var (title, detail) = status switch
+            {
+                StatusCodes.Status415UnsupportedMediaType => ("Type de contenu non pris en charge", "Envoyez le corps en JSON (Content-Type: application/json)."),
+                StatusCodes.Status413PayloadTooLarge => ("Corps de requête trop volumineux", null),
+                _ => ("Corps de requête invalide", "Le corps de la requête est absent, illisible ou d'un type inattendu."),
+            };
+            await Results.Problem(statusCode: status, title: title, detail: detail).ExecuteAsync(httpContext);
+            return true;
+        }
+
         if (exception is not TenantViolationException)
         {
             return false;

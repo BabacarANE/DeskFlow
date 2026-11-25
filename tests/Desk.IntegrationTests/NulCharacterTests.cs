@@ -248,10 +248,9 @@ public class NulCharacterEdgeTests(PostgresFixture postgres) : TicketTestBase(po
         refresh.Headers.Add("Cookie", $"deskflow_refresh={c.Admin.Session.RefreshCookie}");
         Assert.Equal(HttpStatusCode.OK, (await Http.SendAsync(refresh)).StatusCode);
 
-        // An endpoint that needs a body keeps the framework's answer for a missing one: the guard stays out of it. Measured
-        // with the guard unregistered, the answer is the same (a 500 of the framework itself, not caused by the guard).
+        // An endpoint that needs a body answers 400 (ProblemDetails) for a missing one: see EmptyBodyTests.
         var missing = await Raw(agent, "/api/v1/articles", []);
-        Assert.Equal(HttpStatusCode.InternalServerError, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
         Assert.DoesNotContain("UTF-8", await missing.Content.ReadAsStringAsync());
         Assert.DoesNotContain("JSON valide", await missing.Content.ReadAsStringAsync());
 
