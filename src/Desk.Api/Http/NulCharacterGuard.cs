@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Metadata;
 
 namespace Desk.Api.Http;
 
@@ -35,6 +36,14 @@ public sealed class NulCharacterGuard(RequestDelegate next)
             }
         }
 
+        // A route that binds a required body (IAcceptsMetadata, set by the minimal API binder) must receive one.
+        var requiresBody = http.GetEndpoint()?.Metadata.GetMetadata<IAcceptsMetadata>() is { IsOptional: false };
+        if (requiresBody && !http.Request.HasJsonContentType() && http.Request.ContentLength == 0)
+        {
+            await MissingBody().ExecuteAsync(http);
+            return;
+        }
+
         if (http.Request.HasJsonContentType())
         {
             if (http.Request.ContentLength > MaxBodyBytes)
@@ -58,7 +67,14 @@ public sealed class NulCharacterGuard(RequestDelegate next)
                 return;
             }
 
-            // An empty body is not this guard's business (endpoints without body, GET): the binder decides.
+            // A route that needs a body refuses an empty one, a blank one (spaces only, byte order mark only) and the literal
+            // null: the binder would throw on them (500). Routes without a body keep their behaviour (empty is fine there).
+            if (requiresBody && IsBlankOrNull(body))
+            {
+                await MissingBody().ExecuteAsync(http);
+                return;
+            }
+
             if (body.Length > 0)
             {
                 // A UTF-8 byte order mark before a valid document is tolerated (System.Text.Json skips it too).
@@ -92,6 +108,31 @@ public sealed class NulCharacterGuard(RequestDelegate next)
         }
 
         await next(http);
+    }
+
+    private static IResult MissingBody() =>
+        Results.Problem(statusCode: 400, title: "Corps de requête invalide", detail: "Le corps de la requête est requis : envoyez un objet JSON.");
+
+    /// <summary>True for an empty body, one made of JSON whitespace (after an optional byte order mark) and the literal null.</summary>
+    public static bool IsBlankOrNull(ReadOnlySpan<byte> body)
+    {
+        if (body.Length >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF)
+        {
+            body = body[3..];
+        }
+
+        static bool IsSpace(byte b) => b is 0x20 or 0x09 or 0x0D or 0x0A;
+        while (body.Length > 0 && IsSpace(body[0]))
+        {
+            body = body[1..];
+        }
+
+        while (body.Length > 0 && IsSpace(body[^1]))
+        {
+            body = body[..^1];
+        }
+
+        return body.IsEmpty || body.SequenceEqual("null"u8);
     }
 
     private sealed class Frame(bool isArray)

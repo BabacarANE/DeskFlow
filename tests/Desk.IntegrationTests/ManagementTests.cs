@@ -184,10 +184,11 @@ public class DemoEnabledTests(PostgresFixture postgres) : ApiTestBase(postgres)
 
         var users = await JsonAsync(await session.GetAsync("/api/v1/users"));
 
-        Assert.Equal(3, users.GetProperty("total").GetInt32());
+        // The three login accounts plus the fictional colleagues of the demo tickets (1 agent, 3 requesters).
+        Assert.Equal(7, users.GetProperty("total").GetInt32());
         Assert.Equal(4, await QueryDbAsync(db => db.SlaPolicies.IgnoreQueryFilters().CountAsync()));
         await Desk.Infrastructure.Bootstrap.DatabaseInitializer.RunAsync(Factory.Services);
-        Assert.Equal(3, await QueryDbAsync(db => db.Users.IgnoreQueryFilters().CountAsync(u => u.TenantId != null)));
+        Assert.Equal(7, await QueryDbAsync(db => db.Users.IgnoreQueryFilters().CountAsync(u => u.TenantId != null)));
         Assert.Equal(1, await QueryDbAsync(db => db.Tenants.CountAsync()));
     }
 

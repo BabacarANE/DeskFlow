@@ -27,6 +27,11 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // unaccent(text): accent-insensitive article search (ADR 010). The extension itself is created by a migration.
+        b.HasDbFunction(typeof(DeskDbFunctions).GetMethod(nameof(DeskDbFunctions.Unaccent), [typeof(string)])!)
+            .HasName("unaccent")
+            .IsBuiltIn();
+
         b.Entity<Tenant>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(100);

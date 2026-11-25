@@ -96,14 +96,16 @@ public static class ArticleEndpoints
         foreach (var word in words)
         {
             var pattern = $"%{ArticleRules.EscapeLike(word)}%";
+            // Case and accents are ignored on both sides (unaccent + ILIKE, ADR 010); the escape character stays literal.
             articles = articles.Where(a =>
-                EF.Functions.ILike(a.Title, pattern, LikeEscape)
-                || EF.Functions.ILike(a.Symptom, pattern, LikeEscape)
-                || EF.Functions.ILike(a.Cause, pattern, LikeEscape)
-                || EF.Functions.ILike(a.Solution, pattern, LikeEscape)
-                || EF.Functions.ILike(a.Tags, pattern, LikeEscape));
+                EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Title), DeskDbFunctions.Unaccent(pattern), LikeEscape)
+                || EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Symptom), DeskDbFunctions.Unaccent(pattern), LikeEscape)
+                || EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Cause), DeskDbFunctions.Unaccent(pattern), LikeEscape)
+                || EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Solution), DeskDbFunctions.Unaccent(pattern), LikeEscape)
+                || EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Tags), DeskDbFunctions.Unaccent(pattern), LikeEscape));
 
-            Expression<Func<KnowledgeArticle, bool>> inTitle = a => EF.Functions.ILike(a.Title, pattern, LikeEscape);
+            Expression<Func<KnowledgeArticle, bool>> inTitle = a =>
+                EF.Functions.ILike(DeskDbFunctions.Unaccent(a.Title), DeskDbFunctions.Unaccent(pattern), LikeEscape);
             titleHasAll = titleHasAll is null ? inTitle : AndAlso(titleHasAll, inTitle);
         }
 

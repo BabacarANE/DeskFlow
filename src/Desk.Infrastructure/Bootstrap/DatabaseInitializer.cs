@@ -72,8 +72,15 @@ public static class DatabaseInitializer
         logger.LogInformation("SuperAdmin account bootstrapped; it links to its provider on first sign-in");
     }
 
+    /// <summary>Arbitrary constant key of the PostgreSQL advisory lock that serializes demo seeding between API instances.</summary>
+    private const long DemoSeedLockKey = 727_001;
+
     private static async Task SeedDemoAsync(DeskDbContext db, TimeProvider clock, ILogger logger, CancellationToken ct)
     {
+        // One instance seeds at a time (the lock is held until the commit); the next one then sees the data and skips it.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({DemoSeedLockKey})", ct);
+
         var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Slug == DemoAccounts.TenantSlug, ct);
         if (tenant is null)
         {
@@ -104,5 +111,10 @@ public static class DatabaseInitializer
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Demo company seeded");
         }
+
+        // Articles and tickets: only into a company that has none yet; writes no outbox message (see DemoContentSeeder).
+        await DemoContentSeeder.SeedAsync(db, tenant, clock, logger, ct);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 }
