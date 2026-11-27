@@ -45,7 +45,7 @@ L'e-mail arrive dans Mailpit. Détails : [runbook DLQ](runbooks/dlq.md).
 
 - **Isolation** : base partagée, `TenantId`, filtres globaux, 404 pour une autre entreprise ; prouvée par des tests avec deux entreprises ([ADR 002](adr/002-shared-database-tenant-id.md)).
 - **Fiabilité** : outbox transactionnelle, idempotence, reprises, DLQ, rejeu, consommateurs supervisés qui se réabonnent après une coupure ([ADR 008](adr/008-messaging-layer-design.md)).
-- **Ce qui a mal tourné** : 26 entrées dans le [journal de troubleshooting](troubleshooting/README.md), toutes réellement rencontrées (par exemple l'outbox qui marquait « envoyé » un événement non routable).
+- **Ce qui a mal tourné** : 27 entrées dans le [journal de troubleshooting](troubleshooting/README.md), toutes réellement rencontrées (par exemple l'outbox qui marquait « envoyé » un événement non routable).
 - **Limite honnête** : les connexions Google et GitHub n'ont pas été éprouvées de bout en bout ici ; le mode démo est le parcours testé.
 
 ## Remarque sur l'escalade SLA

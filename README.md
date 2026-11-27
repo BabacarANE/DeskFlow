@@ -69,6 +69,8 @@ cd web && npm ci && npm test -- --no-watch # tests Angular
 cd web && npm run e2e                      # Playwright contre la pile Docker lancée (compose up)
 ```
 
+La suite E2E envoie à elle seule presque autant de requêtes `/auth` que la limite par défaut (30 par minute et par IP). En local, pour éviter des réponses 429 (par exemple en la relançant aussitôt), mettre `AUTH_RATE_LIMIT=300` dans `.env`, puis `docker compose up -d` ; revenir à 30 ensuite.
+
 La CI (GitHub Actions) exécute le format et les tests .NET, le lint, Prettier, les tests et le build Angular, le build des images Docker et le parcours E2E sur la pile complète. Chaque pull request a été auditée avant fusion (conformité, sécurité, isolation).
 
 ## Documentation

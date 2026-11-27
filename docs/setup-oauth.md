@@ -6,10 +6,10 @@ Action manuelle : ces identifiants se créent chez les fournisseurs et ne sont j
 
 | Environnement | Google | GitHub |
 | --- | --- | --- |
-| Docker Compose / dev | `http://localhost:8080/signin-google` | `http://localhost:8080/signin-github` |
+| Docker Compose (local) | `http://localhost:8080/signin-google` | `http://localhost:8080/signin-github` |
 | Démo déployée | `https://<domaine>/signin-google` | `https://<domaine>/signin-github` |
 
-Les deux URI passent par nginx (même site que le front), ce qui permet au cookie `SameSite=Lax` de fonctionner.
+Les deux URI passent par le reverse proxy (nginx en local, Caddy en production), sur le même site que le front, ce qui permet au cookie `SameSite=Lax` de fonctionner.
 
 ## Google
 
@@ -25,11 +25,22 @@ Les deux URI passent par nginx (même site que le front), ce qui permet au cooki
 
 ## Variables d'environnement
 
+Avec **Docker Compose**, dans le fichier `.env` à la racine :
+
 ```
-Authentication__Google__ClientId=...
-Authentication__Google__ClientSecret=...
-Authentication__GitHub__ClientId=...
-Authentication__GitHub__ClientSecret=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
 ```
+
+puis `docker compose up -d` pour recréer l'API (en production : `docker compose -f docker-compose.prod.yml up -d`, voir [deploy.md](deploy.md)).
+
+En développement **sans Docker** (`dotnet run`), utiliser les noms de configuration .NET, au choix :
+
+- variables d'environnement : `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__GitHub__ClientId`, `Authentication__GitHub__ClientSecret` ;
+- `user-secrets` : lancer une fois `dotnet user-secrets init --project src/Desk.Api`, puis `dotnet user-secrets set "Authentication:Google:ClientId" "..." --project src/Desk.Api` (séparateur `:`, de même pour les trois autres clés).
+
+La connexion Google ou GitHub n'est toutefois pas prévue avec `ng serve` : `web/proxy.conf.json` ne relaie pas `/signin-google` ni `/signin-github`. Pour l'essayer en local, utiliser Docker Compose.
 
 Sans ces valeurs, l'API démarre et la connexion de démo fonctionne (si `Demo:Enabled=true`) ; seule la connexion Google ou GitHub répond une erreur claire.

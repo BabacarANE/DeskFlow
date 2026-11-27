@@ -30,3 +30,4 @@ Problèmes réels rencontrés pendant le développement, avec cause et solution 
 | [024](024-sla-concurrent-put-deadlock.md) | Des `PUT /sla-policies` simultanés provoquaient un deadlock | API |
 | [025](025-empty-body-500.md) | Un corps vide, `null` ou d'un mauvais type répondait 500 | API |
 | [026](026-sr-only-in-scroll-table-page-overflow.md) | Défilement horizontal de la page sur mobile (`sr-only` dans un tableau défilant) | Web |
+| [027](027-oauth-redirect-uri-missing-port.md) | L'URI de redirection OAuth envoyée au fournisseur perdait le port 8080 | Docker |

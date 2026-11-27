@@ -72,6 +72,12 @@ jobs:
           sed -i "s|^JWT_KEY=.*|JWT_KEY=$(openssl rand -hex 32)|" .env
           sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
           sed -i "s|^RABBITMQ_PASSWORD=.*|RABBITMQ_PASSWORD=$(openssl rand -hex 16)|" .env
+          # The whole E2E suite signs in from a single IP within a minute: raise the /auth rate limit here only.
+          sed -i "s|^AUTH_RATE_LIMIT=.*|AUTH_RATE_LIMIT=300|" .env
+          # Dummy OAuth credentials: register the providers so the redirect URI can be checked (no provider call).
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET; do
+            sed -i "s|^$name=.*|$name=ci-dummy|" .env
+          done
       - name: Start the stack
         run: docker compose up -d --build --wait --wait-timeout 300
       - name: Install web dependencies
