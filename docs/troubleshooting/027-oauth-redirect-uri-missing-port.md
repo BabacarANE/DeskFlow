@@ -11,7 +11,7 @@ Trouvé avant la première création des identifiants OAuth, en lisant `docker/n
 nginx transmettait `proxy_set_header Host $host`. La variable `$host` ne contient pas le port ; ASP.NET construit l'URI de redirection à partir de l'en-tête `Host` reçu.
 
 ## Solution
-`proxy_set_header Host $http_host;` (l'en-tête tel qu'envoyé par le navigateur), pour `/api`, `/signin-*` et `/hubs/`.
+`proxy_set_header Host $http_host;` (l'en-tête tel qu'envoyé par le navigateur), pour `/api`, `/health`, `/signin-*` et `/hubs/`.
 
 ## Pour l'éviter
 Test E2E `web/e2e/oauth-redirect.spec.ts` à travers nginx ; la CI renseigne des identifiants factices pour enregistrer les deux fournisseurs.
